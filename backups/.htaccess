@@ -1,0 +1,11 @@
+# Bloquer tout accès public aux fichiers de sauvegarde
+Order Deny,Allow
+Deny from all
+
+# Pour les versions récentes d'Apache (2.4+)
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+
+# Empêcher le listing du dossier au cas où
+Options -Indexes

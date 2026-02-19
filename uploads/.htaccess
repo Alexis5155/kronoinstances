@@ -1,0 +1,20 @@
+# 1. Interdire le listage des fichiers (Empêche de voir la liste des PDF)
+Options -Indexes
+
+# 2. Sécurité : Empêcher l'exécution de scripts PHP malveillants
+# (Si un utilisateur parvient à uploader un fichier .php déguisé)
+<FilesMatch "\.(php|php3|php4|php5|phtml|pl|py|jsp|asp|sh|cgi)$">
+    Order Deny,Allow
+    Deny from all
+</FilesMatch>
+
+# 3. Désactiver le moteur PHP dans ce dossier pour plus de sûreté
+<IfModule mod_php5.c>
+    php_flag engine off
+</IfModule>
+<IfModule mod_php7.c>
+    php_flag engine off
+</IfModule>
+<IfModule mod_php.c>
+    php_flag engine off
+</IfModule>
