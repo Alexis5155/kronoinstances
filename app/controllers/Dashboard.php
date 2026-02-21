@@ -3,8 +3,8 @@ namespace app\controllers;
 
 use app\core\Controller;
 use app\models\User;
-use app\models\Arrete;
-use app\models\Signataire;
+use app\models\Seance;
+use app\models\Instance;
 
 class Dashboard extends Controller {
 
@@ -15,51 +15,31 @@ class Dashboard extends Controller {
             exit;
         }
 
-        $arreteModel = new Arrete();
-        $userModel = new User();
+        $seanceModel = new Seance();
+        $instanceModel = new Instance();
         
-        $myId = $_SESSION['user_id'];
-        
-        // Récupération des infos étendues de l'utilisateur
-        $userInfo = $userModel->getInfoWithService($myId);
-        $myServiceId = $userInfo['service_id'] ?? null;
-
-        // --- SUPPRESSION DU TRAITEMENT POST DE CRÉATION ---
-        // L'ancien bloc if ($_SERVER['REQUEST_METHOD'] == 'POST' ...) est supprimé.
-
         // --- RÉCUPÉRATION DES DONNÉES ---
         
-        // Statistiques
-        $stats = $arreteModel->getStats($myId);
+        // 1. Les 5 prochaines séances à venir
+        $prochainesSeances = $seanceModel->getProchaines(5);
 
-        // Mes dossiers en cours (Brouillons + En validation)
-        // On adapte le filtre pour inclure les statuts workflow
-        $pendingList = $arreteModel->getFiltered([
-            'scope'   => 'me',
-            'user_id' => $myId,
-            'statut_workflow'  => ['brouillon', 'en_validation', 'rejete'] // Nouveaux statuts
-        ], 5, 0);
-
-        // Dossiers du service (Collègues) - En cours de validation
-        $serviceList = [];
-        if (User::can('view_service_actes') && $myServiceId) {
-            $serviceList = $arreteModel->getFiltered([
-                'scope'           => 'service',
-                'user_id'         => $myId,
-                'user_service_id' => $myServiceId,
-                'statut_workflow' => ['en_validation'], // Seuls ceux en validation intéressent les collègues
-                'exclude_me'      => true
-            ], 5, 0);
+        // 2. Statistiques rapides (Widget)
+        $nbInstances = count($instanceModel->getAll());
+        
+        // Calcul du nombre de séances "Planifiées" (non encore convoquées)
+        // On le fait en PHP pour simplifier, ou on pourrait ajouter une méthode count() dans le modèle
+        $nbSeancesPlanifiees = 0;
+        foreach($prochainesSeances as $s) {
+            if($s['statut'] === 'planifiee') $nbSeancesPlanifiees++;
         }
 
         // Rendu de la vue
         $this->render('dashboard', [
-            'title'           => 'Tableau de bord',
-            'username'        => $_SESSION['username'],
-            'my_service_id'   => $myServiceId,
-            'my_service_nom'  => $userInfo['service_nom'] ?? 'Sans service',
-            'stats'           => $stats,
-
+            'title'             => 'Tableau de bord',
+            'username'          => $_SESSION['username'],
+            'prochainesSeances' => $prochainesSeances,
+            'nbInstances'       => $nbInstances,
+            'nbSeancesPlanifiees' => $nbSeancesPlanifiees
         ]);
     }
 }

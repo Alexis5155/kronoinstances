@@ -71,7 +71,7 @@ class Compte extends Controller {
             }
         }
 
-        $this->render('user/index', [
+        $this->render('user/compte', [
             'user' => $user,
             'csrf_token' => getCsrfToken()
         ]);

@@ -59,7 +59,7 @@ class Login extends Controller {
         // Génération d'un nouveau jeton CSRF pour le formulaire
         $data['csrf_token'] = getCsrfToken();
         
-        $this->render('login', $data);
+        $this->render('auth/login', $data);
     }
 
     /**

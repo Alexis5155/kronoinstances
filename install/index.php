@@ -1,6 +1,6 @@
 <?php
 /**
- * KRONOACTES - Installateur SPA (4 Étapes, Transition Fluide)
+ * KRONOINSTANCES - Installateur SPA
  */
 
 $configPath = '../app/config/config.php';
@@ -53,7 +53,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $stmt = $pdo->prepare("UPDATE settings SET s_value = ? WHERE s_key = 'collectivite_nom'");
             $stmt->execute([$_POST['col_nom']]);
 
-            // Config
+            // Config PHP avec SMTP
             $config_content = "<?php\n// Généré le " . date('d/m/Y H:i:s') . "\n"
                 . "define('DB_HOST', " . var_export($_POST['host'], true) . ");\n"
                 . "define('DB_NAME', " . var_export($_POST['dbname'], true) . ");\n"
@@ -90,7 +90,7 @@ $all_ok = !in_array(false, $prereqs);
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>Installation - KronoActes</title>
+    <title>Installation - KronoInstances</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <style>
@@ -114,7 +114,7 @@ $all_ok = !in_array(false, $prereqs);
         <div class="col-lg-11">
             
             <header class="text-center mb-5">
-                <h1 class="fw-bold">🔧 KronoActes</h1>
+                <h1 class="fw-bold">🔧 KronoInstances</h1>
                 <p class="text-muted">Assistant d'installation et de configuration</p>
             </header>
 
@@ -122,7 +122,7 @@ $all_ok = !in_array(false, $prereqs);
                 <div class="stepper-item active" data-step="1"><span class="badge bg-secondary badge-step mb-2">1</span><br><small>Base de données</small></div>
                 <div class="stepper-item" data-step="2"><span class="badge bg-secondary badge-step mb-2">2</span><br><small>Compte admin</small></div>
                 <div class="stepper-item" data-step="3"><span class="badge bg-secondary badge-step mb-2">3</span><br><small>Personnalisation</small></div>
-                <div class="stepper-item" data-step="4"><span class="badge bg-secondary badge-step mb-2">4</span><br><small>Gestion des courriels</small></div>
+                <div class="stepper-item" data-step="4"><span class="badge bg-secondary badge-step mb-2">4</span><br><small>Gestion Email</small></div>
                 <div class="stepper-item" data-step="5"><span class="badge bg-secondary badge-step mb-2">5</span><br><small>Finalisation</small></div>
             </div>
 
@@ -133,11 +133,12 @@ $all_ok = !in_array(false, $prereqs);
                             <div id="alert-container"></div>
 
                             <form id="masterForm">
+                                <!-- ÉTAPE 1 : BDD -->
                                 <div class="step-panel active" id="step1">
                                     <h5 class="fw-bold mb-4">Base de données MySQL</h5>
                                     <div class="row g-3">
                                         <div class="col-md-6"><label class="form-label small fw-bold text-muted">Hôte</label><input type="text" name="host" id="host" class="form-control" placeholder="ex: localhost" required></div>
-                                        <div class="col-md-6"><label class="form-label small fw-bold text-muted">Nom de la base</label><input type="text" name="dbname" id="dbname" class="form-control" placeholder="ex: kronoactes" required></div>
+                                        <div class="col-md-6"><label class="form-label small fw-bold text-muted">Nom de la base</label><input type="text" name="dbname" id="dbname" class="form-control" placeholder="ex: kronoinstances" required></div>
                                         <div class="col-md-6"><label class="form-label small fw-bold text-muted">Utilisateur</label><input type="text" name="dbuser" id="dbuser" class="form-control" placeholder="ex: root" required></div>
                                         <div class="col-md-6"><label class="form-label small fw-bold text-muted">Mot de passe</label><input type="text" name="dbpass" id="dbpass" class="form-control" placeholder="Laisser vide si aucun"></div>
                                     </div>
@@ -146,8 +147,9 @@ $all_ok = !in_array(false, $prereqs);
                                     </div>
                                 </div>
 
+                                <!-- ÉTAPE 2 : ADMIN -->
                                 <div class="step-panel" id="step2">
-                                    <h5 class="fw-bold mb-4">Création d'un compte administrateur</h5>
+                                    <h5 class="fw-bold mb-4">Création du compte administrateur</h5>
                                     <div class="row g-3">
                                         <div class="col-md-6"><label class="form-label small fw-bold text-muted">Identifiant</label><input type="text" name="admin_user" id="admin_user" class="form-control" placeholder="ex: admin" required></div>
                                         <div class="col-md-6"><label class="form-label small fw-bold text-muted">Email</label><input type="email" name="admin_email" id="admin_email" class="form-control" placeholder="ex: admin@mairie.fr" required></div>
@@ -159,6 +161,7 @@ $all_ok = !in_array(false, $prereqs);
                                     </div>
                                 </div>
 
+                                <!-- ÉTAPE 3 : IDENTITÉ -->
                                 <div class="step-panel" id="step3">
                                     <h5 class="fw-bold mb-4">Identité de l'instance</h5>
                                     <div class="mb-3">
@@ -171,24 +174,27 @@ $all_ok = !in_array(false, $prereqs);
                                     </div>
                                 </div>
 
+                                <!-- ÉTAPE 4 : SMTP (NOUVEAU) -->
                                 <div class="step-panel" id="step4">
-                                    <h5 class="fw-bold mb-4">Configuration email (SMTP)</h5>
+                                    <h5 class="fw-bold mb-4">Configuration Email (SMTP)</h5>
+                                    <p class="text-muted small mb-3">Nécessaire pour l'envoi des convocations et notifications.</p>
                                     <div class="row g-3">
                                         <div class="col-md-8"><label class="form-label small fw-bold text-muted">Hôte SMTP</label><input type="text" name="mail_host" id="mail_host" class="form-control smtp-field" placeholder="smtp.gmail.com" required></div>
                                         <div class="col-md-4"><label class="form-label small fw-bold text-muted">Port</label><input type="number" name="mail_port" id="mail_port" class="form-control smtp-field" value="587" required></div>
                                         <div class="col-md-6"><label class="form-label small fw-bold text-muted">Utilisateur</label><input type="text" name="mail_user" id="mail_user" class="form-control smtp-field" placeholder="ex: noreply@mairie.fr" required></div>
-                                        <div class="col-md-6"><label class="form-label small fw-bold text-muted">Mot de passe</label><input type="text" name="mail_pass" id="mail_pass" class="form-control smtp-field" required></div>
-                                        <div class="col-md-12"><label class="form-label small fw-bold text-muted">Email de expéditeur (FROM)</label><input type="email" name="mail_from" id="mail_from" class="form-control smtp-field" placeholder="ex: noreply@mairie.fr" required></div>
+                                        <div class="col-md-6"><label class="form-label small fw-bold text-muted">Mot de passe</label><input type="password" name="mail_pass" id="mail_pass" class="form-control smtp-field" required></div>
+                                        <div class="col-md-12"><label class="form-label small fw-bold text-muted">Email expéditeur (FROM)</label><input type="email" name="mail_from" id="mail_from" class="form-control smtp-field" placeholder="ex: noreply@mairie.fr" required></div>
                                     </div>
-                                    <div class="mt-4 d-flex justify-content-between">
+                                    <div class="mt-4 d-flex justify-content-between align-items-center">
                                         <button type="button" onclick="goToStep(3)" class="btn btn-outline-secondary px-4">Retour</button>
                                         <div class="d-flex gap-2">
-                                            <button type="button" onclick="skipSMTP()" class="btn btn-link text-decoration-none text-muted">Passer cette étape</button>
+                                            <button type="button" onclick="skipSMTP()" class="btn btn-link text-muted text-decoration-none">Passer cette étape</button>
                                             <button type="button" onclick="validateSMTP()" class="btn btn-primary px-4">Suivant</button>
                                         </div>
                                     </div>
                                 </div>
 
+                                <!-- ÉTAPE 5 : FINALISATION -->
                                 <div class="step-panel" id="step5">
                                     <h5 class="fw-bold mb-4">Récapitulatif</h5>
                                     <div class="table-responsive mb-4">
@@ -208,11 +214,10 @@ $all_ok = !in_array(false, $prereqs);
                                         <div class="mb-4 text-success"><i class="bi bi-check-circle-fill display-1"></i></div>
                                         <h3 class="fw-bold">Installation terminée !</h3>
                                         <div class="alert alert-danger py-2 small mt-3"><i class="bi bi-exclamation-triangle-fill me-2"></i>Supprimez le dossier <b>/install</b> de votre serveur.</div>
-                                        <h6 class="fw-bold mt-5 mb-3 text-start border-bottom pb-2">Suggestions de configuration :</h6>
+                                        <h6 class="fw-bold mt-5 mb-3 text-start border-bottom pb-2">Premiers pas :</h6>
                                         <div class="row text-start g-3">
-                                            <div class="col-md-6"><a href="../login?return=admin/parametres?section=services" target="_blank" class="text-decoration-none h-100 d-block"><div class="p-3 border rounded shadow-sm bg-white h-100 onboarding-card"><h6 class="fw-bold mb-1 small text-primary"><i class="bi bi-building me-2"></i> Services</h6><p class="x-small text-muted mb-0">Définissez vos services pour isoler les actes.</p></div></a></div>
-                                            <div class="col-md-6"><a href="../login?return=admin/parametres?section=signataires" target="_blank" class="text-decoration-none h-100 d-block"><div class="p-3 border rounded shadow-sm bg-white h-100 onboarding-card"><h6 class="fw-bold mb-1 small text-primary"><i class="bi bi-pen me-2"></i> Signataires</h6><p class="x-small text-muted mb-0">Ajoutez les élus habilités à signer.</p></div></a></div>
-                                            <div class="col-md-6"><a href="../login?return=admin/users" target="_blank" class="text-decoration-none h-100 d-block"><div class="p-3 border rounded shadow-sm bg-white h-100 onboarding-card"><h6 class="fw-bold mb-1 small text-primary"><i class="bi bi-people me-2"></i> Agents & Rôles</h6><p class="x-small text-muted mb-0">Gérez les comptes collaborateurs.</p></div></a></div>
+                                            <div class="col-md-6"><a href="../login?return=admin/instances" target="_blank" class="text-decoration-none h-100 d-block"><div class="p-3 border rounded shadow-sm bg-white h-100 onboarding-card"><h6 class="fw-bold mb-1 small text-primary"><i class="bi bi-diagram-3 me-2"></i> Instances</h6><p class="x-small text-muted mb-0">Configurez vos CAP, CST et leurs membres.</p></div></a></div>
+                                            <div class="col-md-6"><a href="../login?return=admin/users" target="_blank" class="text-decoration-none h-100 d-block"><div class="p-3 border rounded shadow-sm bg-white h-100 onboarding-card"><h6 class="fw-bold mb-1 small text-primary"><i class="bi bi-people me-2"></i> Utilisateurs</h6><p class="x-small text-muted mb-0">Créez les comptes RH et Élus.</p></div></a></div>
                                             <div class="col-md-6"><a href="../login?return=admin/logs" target="_blank" class="text-decoration-none h-100 d-block"><div class="p-3 border rounded shadow-sm bg-white h-100 onboarding-card"><h6 class="fw-bold mb-1 small text-primary"><i class="bi bi-journal-text me-2"></i> Audit Trail</h6><p class="x-small text-muted mb-0">Vérifiez le journal de traçabilité.</p></div></a></div>
                                         </div>
                                         <a href="../login" class="btn btn-dark w-100 py-3 fw-bold mt-5">Accéder au Tableau de bord</a>
@@ -240,7 +245,7 @@ $all_ok = !in_array(false, $prereqs);
                     <div class="card shadow-sm bg-dark text-white p-2">
                         <div class="card-body">
                             <h6 class="fw-bold mb-3"><i class="bi bi-info-circle me-2 text-info"></i>Concept</h6>
-                            <p class="x-small text-white-50 lh-base mb-0">KronoActes automatise l'attribution des numéros d'arrêtés municipaux et garantit une traçabilité conforme aux exigences réglementaires.</p>
+                            <p class="x-small text-white-50 lh-base mb-0">KronoInstances automatise la gestion des instances paritaires (CAP, CST), de la convocation au procès-verbal.</p>
                         </div>
                     </div>
                 </div>

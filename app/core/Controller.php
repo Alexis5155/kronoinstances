@@ -5,7 +5,6 @@ class Controller {
     protected function render($view, $data = []) {
         extract($data);
         
-        // On utilise la constante pour les inclusions si besoin
         $root = URLROOT . '/'; 
         
         if (file_exists(__DIR__ . '/../views/' . $view . '.php')) {

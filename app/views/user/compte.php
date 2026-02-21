@@ -33,7 +33,7 @@
     </style>
 </head>
 <body class="d-flex flex-column min-vh-100 bg-light text-dark">
-    <?php include 'app/views/header.php'; ?>
+    <?php include __DIR__ . '/../layouts/header.php'; ?>
     
     <div class="container py-4">
         <div class="mb-4 px-2">
@@ -148,6 +148,7 @@
         </div>
     </div>
 
-    <?php include 'app/views/footer.php'; ?>
+    <?php include __DIR__ . '/../layouts/footer.php'; ?>
 </body>
 </html>
+

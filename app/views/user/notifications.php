@@ -1,4 +1,4 @@
-<?php include 'app/views/header.php'; ?>
+<?php include __DIR__ . '/../layouts/header.php'; ?>
 
 <style>
     /* Structure de la ligne */
@@ -164,4 +164,4 @@ function animateDelete(id) {
 }
 </script>
 
-<?php include 'app/views/footer.php'; ?>
+<?php include __DIR__ . '/../layouts/footer.php'; ?>
