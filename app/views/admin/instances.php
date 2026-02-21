@@ -26,7 +26,7 @@
     -webkit-box-orient: vertical;
     overflow: hidden;
     text-overflow: ellipsis;
-    min-height: 2.5rem; /* Force la place pour 2 lignes même s'il n'y en a qu'une */
+    min-height: 2.5rem; 
 }
 </style>
 
@@ -84,14 +84,12 @@
                         </div>
                     </div>
                     <div class="card-footer bg-transparent border-top-0 pt-0 pb-3 px-3 d-flex gap-2 mt-auto">
-                        <!-- Le bouton éditer passe bien l'objet JSON complet via data-instance et appelle openModal(this) -->
                         <button type="button" class="btn btn-sm btn-outline-primary flex-grow-1"
-                                data-instance="<?= htmlspecialchars(json_encode($inst), ENT_QUOTES, 'UTF-8') ?>"
-                                onclick="openModal(this)">
+                                onclick="openModal(<?= htmlspecialchars(json_encode($inst), ENT_QUOTES, 'UTF-8') ?>)">
                             <i class="bi bi-pencil-square me-1"></i>Éditer
                         </button>
                         <button type="button" class="btn btn-sm btn-outline-danger"
-                                onclick="confirmDelete(<?= $inst['id'] ?>, '<?= htmlspecialchars($inst['nom'], ENT_QUOTES) ?>')">
+                                onclick="confirmDelete(<?= $inst['id'] ?>, '<?= htmlspecialchars(addslashes($inst['nom'])) ?>')">
                             <i class="bi bi-trash"></i>
                         </button>
                     </div>
@@ -233,7 +231,7 @@
                                         </div>
                                         <div class="col-md-4">
                                             <select id="m_college" class="form-select form-select-sm">
-                                                <option value="employeur">Collège Employeur</option>
+                                                <option value="administration">Collège Administration</option>
                                                 <option value="personnel">Collège Personnel</option>
                                             </select>
                                         </div>
@@ -266,7 +264,7 @@
                         </div>
 
                         <!-- TABLEAUX MEMBRES -->
-                        <h6 class="text-primary fw-bold"><i class="bi bi-building me-1"></i>Collège Employeur</h6>
+                        <h6 class="text-primary fw-bold"><i class="bi bi-building me-1"></i>Collège Administration</h6>
                         <div class="table-responsive mb-4">
                             <table class="table table-sm table-bordered bg-white fixed-table mb-0">
                                 <thead class="table-light text-muted small">
@@ -278,7 +276,7 @@
                                         <th style="width:80px" class="text-center">Actions</th>
                                     </tr>
                                 </thead>
-                                <tbody id="tbody-employeur"></tbody>
+                                <tbody id="tbody-administration"></tbody>
                             </table>
                         </div>
 
@@ -501,9 +499,9 @@ function removeMember(tempId) {
 }
 
 function renderMembersTables() {
-    const tbodyEmp = document.getElementById('tbody-employeur');
+    const tbodyAdmin = document.getElementById('tbody-administration');
     const tbodyPers = document.getElementById('tbody-personnel');
-    tbodyEmp.innerHTML = ''; tbodyPers.innerHTML = '';
+    tbodyAdmin.innerHTML = ''; tbodyPers.innerHTML = '';
 
     document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => bootstrap.Tooltip.getInstance(el)?.dispose());
 
@@ -529,11 +527,11 @@ function renderMembersTables() {
                 <button type="button" class="btn btn-sm text-danger border-0 p-0" onclick="removeMember('${m.id}')"><i class="bi bi-x-circle-fill"></i></button>
             </td>`;
 
-        if (m.college === 'employeur') tbodyEmp.appendChild(tr);
+        if (m.college === 'administration') tbodyAdmin.appendChild(tr);
         else tbodyPers.appendChild(tr);
     });
 
-    if (!tbodyEmp.innerHTML) tbodyEmp.innerHTML = '<tr><td colspan="5" class="text-center text-muted small py-2">Aucun membre dans ce collège</td></tr>';
+    if (!tbodyAdmin.innerHTML) tbodyAdmin.innerHTML = '<tr><td colspan="5" class="text-center text-muted small py-2">Aucun membre dans ce collège</td></tr>';
     if (!tbodyPers.innerHTML) tbodyPers.innerHTML = '<tr><td colspan="5" class="text-center text-muted small py-2">Aucun membre dans ce collège</td></tr>';
 
     document.getElementById('membres_json').value = JSON.stringify(currentMembers);
@@ -598,7 +596,7 @@ const pbManagers = new Pillbox('pb-managers', 'managers', 'bg-info text-dark');
 // ---------------------------------------------------------
 // OUVERTURE DE LA MODALE PRINCIPALE
 // ---------------------------------------------------------
-function openModal(btn = null) {
+function openModal(inst = null) {
     document.querySelector('#instanceTabs button[data-bs-target="#tab-infos"]').click();
     closeMemberForm();
 
@@ -611,8 +609,7 @@ function openModal(btn = null) {
         if (el) el.style.display = 'none';
     });
 
-    if (btn) {
-        const inst = JSON.parse(btn.dataset.instance);
+    if (inst) {
         document.getElementById('modalTitle').innerText = "Modifier : " + inst.nom;
         document.getElementById('instance_id').value = inst.id;
         document.getElementById('nom').value = inst.nom;

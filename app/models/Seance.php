@@ -11,10 +11,6 @@ class Seance {
         $this->db = Database::getConnection();
     }
 
-    /**
-     * Récupère les prochaines séances à venir (toutes instances confondues)
-     * Utile pour le Dashboard
-     */
     public function getProchaines($limit = 5) {
         $sql = "SELECT s.*, i.nom as instance_nom 
                 FROM seances s
@@ -22,16 +18,12 @@ class Seance {
                 WHERE s.date_seance >= CURDATE()
                 ORDER BY s.date_seance ASC
                 LIMIT :limit";
-        
         $stmt = $this->db->prepare($sql);
         $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
         $stmt->execute();
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
-    /**
-     * Récupère toutes les séances d'une instance donnée
-     */
     public function getByInstance($instanceId) {
         $sql = "SELECT s.*, 
                        (SELECT COUNT(*) FROM points_odj p WHERE p.seance_id = s.id) as nb_points
@@ -55,16 +47,30 @@ class Seance {
 
     public function create($instanceId, $date, $heure, $lieu) {
         $stmt = $this->db->prepare("INSERT INTO seances (instance_id, date_seance, heure_debut, lieu, statut) VALUES (?, ?, ?, ?, 'planifiee')");
-        return $stmt->execute([$instanceId, $date, $heure, $lieu]);
+        if ($stmt->execute([$instanceId, $date, $heure, $lieu])) {
+            return $this->db->lastInsertId();
+        }
+        return false;
+    }
+
+    public function update($id, $date, $heure, $lieu) {
+        $stmt = $this->db->prepare("UPDATE seances SET date_seance = ?, heure_debut = ?, lieu = ? WHERE id = ?");
+        return $stmt->execute([$date, $heure, $lieu, $id]);
     }
 
     public function updateStatut($id, $statut) {
         $stmt = $this->db->prepare("UPDATE seances SET statut = ? WHERE id = ?");
         return $stmt->execute([$statut, $id]);
     }
-    
+
     public function updateQuorum($id, $attained) {
         $stmt = $this->db->prepare("UPDATE seances SET quorum_atteint = ? WHERE id = ?");
         return $stmt->execute([$attained ? 1 : 0, $id]);
+    }
+
+    public function delete($id) {
+        // Les points ODJ seront supprimés en cascade si la contrainte FK est définie
+        $stmt = $this->db->prepare("DELETE FROM seances WHERE id = ?");
+        return $stmt->execute([$id]);
     }
 }

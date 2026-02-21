@@ -11,9 +11,6 @@ class PointOdj {
         $this->db = Database::getConnection();
     }
 
-    /**
-     * Récupère les points d'une séance triés par ordre
-     */
     public function getBySeance($seanceId) {
         $stmt = $this->db->prepare("SELECT * FROM points_odj WHERE seance_id = ? ORDER BY ordre_affichage ASC");
         $stmt->execute([$seanceId]);
@@ -21,7 +18,6 @@ class PointOdj {
     }
 
     public function create($seanceId, $titre, $description, $type, $directionOrigine) {
-        // On récupère le dernier ordre pour mettre ce point à la fin
         $stmtOrder = $this->db->prepare("SELECT MAX(ordre_affichage) FROM points_odj WHERE seance_id = ?");
         $stmtOrder->execute([$seanceId]);
         $maxOrder = $stmtOrder->fetchColumn() ?: 0;
@@ -33,6 +29,28 @@ class PointOdj {
     public function updateStatut($id, $statut) {
         $stmt = $this->db->prepare("UPDATE points_odj SET statut = ? WHERE id = ?");
         return $stmt->execute([$statut, $id]);
+    }
+
+    // NOUVEAU : Sauvegarde des débats via AJAX
+    public function updateDebats($id, $debats) {
+        $stmt = $this->db->prepare("UPDATE points_odj SET debats = ? WHERE id = ?");
+        return $stmt->execute([$debats, $id]);
+    }
+
+    // NOUVEAU : Sauvegarder les votes globaux par collège
+    public function saveVotes($pointId, $college, $pour, $contre, $abstention, $refus) {
+        // On supprime d'abord les anciens votes de ce collège pour ce point
+        $this->db->prepare("DELETE FROM votes WHERE point_odj_id = ? AND college = ?")->execute([$pointId, $college]);
+        
+        $stmt = $this->db->prepare("INSERT INTO votes (point_odj_id, college, nb_pour, nb_contre, nb_abstention, nb_refus_vote) VALUES (?, ?, ?, ?, ?, ?)");
+        return $stmt->execute([$pointId, $college, (int)$pour, (int)$contre, (int)$abstention, (int)$refus]);
+    }
+
+    // NOUVEAU : Récupérer les votes d'un point
+    public function getVotes($pointId) {
+        $stmt = $this->db->prepare("SELECT * FROM votes WHERE point_odj_id = ?");
+        $stmt->execute([$pointId]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
     
     public function delete($id) {
