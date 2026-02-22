@@ -57,4 +57,16 @@ class PointOdj {
         $stmt = $this->db->prepare("DELETE FROM points_odj WHERE id = ?");
         return $stmt->execute([$id]);
     }
+
+        // Mettre à jour l'ordre de tri (Drag & Drop)
+    public function updateOrdre($id, $ordre) {
+        $stmt = $this->db->prepare("UPDATE points_odj SET ordre_affichage = ? WHERE id = ?");
+        return $stmt->execute([$ordre, $id]);
+    }
+
+    // Mettre à jour la description riche (Exposé des motifs)
+    public function updateDescription($id, $description) {
+        $stmt = $this->db->prepare("UPDATE points_odj SET description = ? WHERE id = ?");
+        return $stmt->execute([$description, $id]);
+    }
 }

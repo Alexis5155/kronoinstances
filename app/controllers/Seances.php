@@ -48,32 +48,6 @@ class Seances extends Controller {
     }
 
     /**
-     * Page de détail d'une séance (ODJ, Présences, Statut)
-     */
-    public function view($id) {
-        $seanceModel = new Seance();
-        $pointModel  = new PointOdj();
-        $instanceModel = new Instance();
-
-        $seance = $seanceModel->getById($id);
-        if (!$seance) {
-            setToast("Séance introuvable.", "danger");
-            $this->redirect('seances');
-            return;
-        }
-
-        $points  = $pointModel->getBySeance($id);
-        $membres = $instanceModel->getMembres($seance['instance_id']);
-
-        $this->render('seances/view', [
-            'title'  => 'Détail de la séance',
-            'seance' => $seance,
-            'points' => $points,
-            'membres' => $membres,
-        ]);
-    }
-
-    /**
      * Planifier une nouvelle séance (Action POST)
      */
     public function create() {
@@ -145,14 +119,11 @@ class Seances extends Controller {
     }
 
     /**
-     * Changer le statut d'une séance (planifiee -> en_cours -> terminee)
-     */
-    /**
-     * Changer le statut d'une séance (planifiee -> en_cours -> terminee)
+     * Changer le statut d'une séance
      */
     public function changeStatut($seanceId) {
         $statut = $_GET['statut'] ?? null;
-        $statutsValides = ['planifiee', 'en_cours', 'terminee'];
+        $statutsValides = ['brouillon', 'date_fixee', 'odj_valide', 'dossier_disponible', 'en_cours', 'terminee'];
 
         if ($statut && in_array($statut, $statutsValides)) {
             $seanceModel = new Seance();
@@ -333,6 +304,133 @@ class Seances extends Controller {
             'votes' => $votes
         ]);
         exit;
+    }
+
+    /**
+     * VUE CONSULTATION (Pour les membres de l'instance)
+     */
+    public function view($id) {
+        $seanceModel = new Seance();
+        $pointModel  = new PointOdj();
+        $instanceModel = new Instance();
+        $docModel = new \app\models\Document();
+
+        $seance = $seanceModel->getById($id);
+        if (!$seance) {
+            setToast("Séance introuvable.", "danger");
+            $this->redirect('seances'); return;
+        }
+
+        $this->render('seances/view', [
+            'title'  => 'Consultation de la séance',
+            'seance' => $seance,
+            'points' => $pointModel->getBySeance($id),
+            'membres' => $instanceModel->getMembres($seance['instance_id']),
+            'documents' => $docModel->getBySeance($id)
+        ]);
+    }
+
+    /**
+     * VUE GESTION (Pour les RH / Admins)
+     */
+    public function edit($id) {
+        $seanceModel = new Seance();
+        $pointModel  = new PointOdj();
+        $instanceModel = new Instance();
+        $docModel = new \app\models\Document();
+
+        $seance = $seanceModel->getById($id);
+        if (!$seance) {
+            $this->redirect('seances'); return;
+        }
+
+        $this->render('seances/edit', [
+            'title'  => 'Gestion de la séance',
+            'seance' => $seance,
+            'points' => $pointModel->getBySeance($id),
+            'membres' => $instanceModel->getMembres($seance['instance_id']),
+            'documents' => $docModel->getBySeance($id)
+        ]);
+    }
+
+    /**
+     * UPLOAD DE DOCUMENT
+     */
+    public function uploadDoc($seanceId) {
+        if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['fichier'])) {
+            $nom = trim($_POST['nom'] ?? '');
+            $pointId = !empty($_POST['point_odj_id']) ? $_POST['point_odj_id'] : null;
+            $typeDoc = $_POST['type_doc'] ?? 'annexe';
+            
+            $file = $_FILES['fichier'];
+            if ($file['error'] === UPLOAD_ERR_OK) {
+                if (empty($nom)) { $nom = pathinfo($file['name'], PATHINFO_FILENAME); }
+                
+                // Sécurisation du nom de fichier et création du dossier
+                $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+                $safeName = uniqid() . '_' . preg_replace('/[^a-zA-Z0-9_-]/', '_', $nom) . '.' . $ext;
+                
+                $uploadDir = 'uploads/seances/' . $seanceId . '/';
+                if (!is_dir($uploadDir)) { mkdir($uploadDir, 0777, true); }
+                
+                $destPath = $uploadDir . $safeName;
+                
+                if (move_uploaded_file($file['tmp_name'], $destPath)) {
+                    $docModel = new \app\models\Document();
+                    $docModel->create($seanceId, $pointId, $nom, $destPath, $typeDoc);
+                    setToast("Document ajouté avec succès.");
+                } else {
+                    setToast("Erreur lors de l'upload du fichier.", "danger");
+                }
+            }
+        }
+        $this->redirect('seances/edit/' . $seanceId);
+    }
+
+    public function deleteDoc($docId) {
+        $docModel = new \app\models\Document();
+        $doc = $docModel->getById($docId);
+        if ($doc) {
+            if (file_exists($doc['chemin_fichier'])) { unlink($doc['chemin_fichier']); }
+            $docModel->delete($docId);
+            setToast("Document supprimé.");
+            $this->redirect('seances/edit/' . $doc['seance_id']);
+        } else {
+            $this->redirect('seances');
+        }
+    }
+
+    /**
+     * AJAX : Mettre à jour l'ordre des points (Drag & Drop)
+     */
+    public function updateOrder() {
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $data = json_decode(file_get_contents('php://input'), true);
+            if (isset($data['order']) && is_array($data['order'])) {
+                $pointModel = new PointOdj();
+                foreach ($data['order'] as $index => $id) {
+                    $pointModel->updateOrdre($id, $index + 1); // +1 car l'index JS commence à 0
+                }
+                echo json_encode(['success' => true]);
+                exit;
+            }
+        }
+    }
+
+    /**
+     * AJAX : Mettre à jour l'exposé des motifs (Texte enrichi)
+     */
+    public function updateDescription($pointId) {
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $data = json_decode(file_get_contents('php://input'), true);
+            $description = $data['description'] ?? '';
+            
+            $pointModel = new PointOdj();
+            $pointModel->updateDescription($pointId, $description);
+            
+            echo json_encode(['success' => true]);
+            exit;
+        }
     }
 
 

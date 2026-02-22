@@ -1,277 +1,250 @@
 <?php require_once __DIR__ . '/../layouts/header.php'; ?>
 
 <?php
-$dateObj  = new DateTime($seance['date_seance'] . ' ' . $seance['heure_debut']);
-$dateFr   = $dateObj->format('l d F Y');
-$heureFr  = $dateObj->format('H\hi');
-
-$statutCfg = [
-    'planifiee' => ['label' => 'Planifiée',  'class' => 'bg-info text-dark',    'icon' => 'bi-calendar-check'],
-    'en_cours'  => ['label' => 'En cours',   'class' => 'bg-warning text-dark', 'icon' => 'bi-play-circle-fill'],
-    'terminee'  => ['label' => 'Terminée',   'class' => 'bg-success',           'icon' => 'bi-check-circle-fill'],
-];
-$s = $statutCfg[$seance['statut']] ?? ['label' => ucfirst($seance['statut']), 'class' => 'bg-secondary', 'icon' => 'bi-circle'];
-
-$typeCfg = [
-    'information'  => ['label' => 'Information',  'class' => 'bg-info text-dark'],
-    'deliberation' => ['label' => 'Délibération', 'class' => 'bg-primary'],
-    'vote'         => ['label' => 'Vote',          'class' => 'bg-danger'],
-    'divers'       => ['label' => 'Divers',        'class' => 'bg-secondary'],
-];
+// Helper pour définir dynamiquement l'icône selon l'extension du fichier
+function getFileIcon($filename) {
+    $ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+    switch ($ext) {
+        case 'pdf': return ['class' => 'bi-file-earmark-pdf-fill', 'color' => 'text-danger'];
+        case 'doc': case 'docx': case 'odt': return ['class' => 'bi-file-earmark-word-fill', 'color' => 'text-primary'];
+        case 'xls': case 'xlsx': case 'ods': return ['class' => 'bi-file-earmark-excel-fill', 'color' => 'text-success'];
+        case 'ppt': case 'pptx': case 'odp': return ['class' => 'bi-file-earmark-ppt-fill', 'color' => 'text-warning'];
+        case 'zip': case 'rar': case '7z': case 'tar': return ['class' => 'bi-file-earmark-zip-fill', 'color' => 'text-secondary'];
+        default: return ['class' => 'bi-file-earmark-fill', 'color' => 'text-muted'];
+    }
+}
 ?>
 
 <div class="container py-4">
-
-    <!-- EN-TÊTE SÉANCE -->
+    <!-- EN-TÊTE CONSULTATION -->
     <div class="card border-0 shadow-sm mb-4">
         <div class="card-body p-4">
-            <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+            <div class="d-flex justify-content-between align-items-center">
                 <div>
-                    <a href="<?= URLROOT ?>/seances" class="text-muted small text-decoration-none">
-                        <i class="bi bi-arrow-left me-1"></i>Retour aux séances
-                    </a>
-                    <h3 class="fw-bold mt-2 mb-1 text-primary">
-                        <i class="bi bi-building me-2"></i><?= htmlspecialchars($seance['instance_nom']) ?>
-                    </h3>
-                    <p class="mb-0 text-muted">
-                        <i class="bi bi-calendar-event me-2"></i><?= ucfirst($dateFr) ?> à <?= $heureFr ?>
+                    <h3 class="fw-bold mb-1"><i class="bi bi-building me-2 text-primary"></i><?= htmlspecialchars($seance['instance_nom']) ?></h3>
+                    <p class="mb-0 text-muted fs-5">
+                        <i class="bi bi-calendar-event me-2"></i><?= date('d/m/Y', strtotime($seance['date_seance'])) ?> à <?= date('H:i', strtotime($seance['heure_debut'])) ?>
                         <?php if (!empty($seance['lieu'])): ?>
                             &nbsp;·&nbsp;<i class="bi bi-geo-alt me-1"></i><?= htmlspecialchars($seance['lieu']) ?>
                         <?php endif; ?>
                     </p>
                 </div>
-                <div class="d-flex align-items-center gap-2 flex-wrap">
-                    <span class="badge <?= $s['class'] ?> fs-6 px-3 py-2">
-                        <i class="bi <?= $s['icon'] ?> me-1"></i><?= $s['label'] ?>
-                    </span>
-                    
-                    <?php if ($seance['statut'] === 'planifiee'): ?>
-                        <a href="<?= URLROOT ?>/seances/changeStatut/<?= $seance['id'] ?>?statut=en_cours" 
-                           class="btn btn-warning btn-sm fw-bold"
-                           onclick="return confirm('Démarrer la séance maintenant ? Vous serez redirigé vers le bureau en direct.')">
-                            <i class="bi bi-play-fill me-1"></i>Démarrer la séance
-                        </a>
-                        
-                    <?php elseif ($seance['statut'] === 'en_cours'): ?>
-                        <!-- NOUVEAU BOUTON : Accès au Live -->
-                        <a href="<?= URLROOT ?>/seances/live/<?= $seance['id'] ?>" class="btn btn-danger btn-sm fw-bold">
-                            <i class="bi bi-record-circle-fill me-1" style="animation: blink 2s infinite;"></i>Accéder au Live
-                        </a>
-                        
-                        <a href="<?= URLROOT ?>/seances/changeStatut/<?= $seance['id'] ?>?statut=terminee" class="btn btn-success btn-sm fw-bold">
-                            <i class="bi bi-stop-fill me-1"></i>Clôturer la séance
-                        </a>
-                    <?php endif; ?>
-
-                    <!-- Supprimer la séance (seulement si planifiée) -->
-                    <?php if ($seance['statut'] === 'planifiee'): ?>
-                        <a href="<?= URLROOT ?>/seances/delete/<?= $seance['id'] ?>"
-                           class="btn btn-outline-danger btn-sm"
-                           onclick="return confirm('Supprimer définitivement cette séance et tous ses points ODJ ?')">
-                            <i class="bi bi-trash"></i>
-                        </a>
-                    <?php endif; ?>
-                </div>
-
-                <!-- Petit ajout CSS pour faire clignoter le point rouge du Live -->
-                <style>
-                    @keyframes blink { 50% { opacity: 0.4; } }
-                </style>
-
+                <!-- BOUTON D'ACCÈS À L'ÉDITION POUR LES GESTIONNAIRES -->
+                <?php if ($hasAdminAccess ?? true): ?>
+                <a href="<?= URLROOT ?>/seances/edit/<?= $seance['id'] ?>" class="btn btn-outline-primary shadow-sm">
+                    <i class="bi bi-gear-fill me-2"></i>Gérer la séance
+                </a>
+                <?php endif; ?>
             </div>
-
-            <!-- QUORUM -->
-            <?php if ($seance['quorum_requis']): ?>
-            <div class="mt-3 pt-3 border-top d-flex align-items-center gap-3 flex-wrap">
-                <span class="small text-muted fw-bold">Quorum requis : <?= $seance['quorum_requis'] ?> membre(s)</span>
-                <div class="form-check form-switch mb-0">
-                    <input class="form-check-input" type="checkbox" id="quorumCheck" 
-                           <?= $seance['quorum_atteint'] ? 'checked' : '' ?>
-                           onchange="toggleQuorum(this, <?= $seance['id'] ?>)">
-                    <label class="form-check-label small fw-bold <?= $seance['quorum_atteint'] ? 'text-success' : 'text-muted' ?>" for="quorumCheck">
-                        Quorum <?= $seance['quorum_atteint'] ? 'atteint ✓' : 'non atteint' ?>
-                    </label>
-                </div>
-            </div>
-            <?php endif; ?>
         </div>
     </div>
 
-    <div class="row g-4">
+    <!-- ORDRE DU JOUR ET DOCUMENTS -->
+         
+    <?php
+    // Logique d'affichage selon le cycle de vie
+    $showOdj  = in_array($seance['statut'], ['odj_valide', 'dossier_disponible', 'en_cours', 'terminee']);
+    $showDocs = in_array($seance['statut'], ['dossier_disponible', 'en_cours', 'terminee']);
+    ?>
 
-        <!-- COLONNE PRINCIPALE : ORDRE DU JOUR -->
+    <div class="row g-4">
         <div class="col-lg-8">
-            <div class="card border-0 shadow-sm h-100">
-                <div class="card-header bg-white border-0 pt-4 px-4 pb-2 d-flex justify-content-between align-items-center">
-                    <h5 class="fw-bold mb-0">
-                        <i class="bi bi-list-ol me-2 text-primary"></i>Ordre du jour
-                        <span class="badge bg-primary bg-opacity-10 text-primary ms-2"><?= count($points) ?> point(s)</span>
-                    </h5>
-                    <?php if ($seance['statut'] !== 'terminee'): ?>
-                    <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addPointModal">
-                        <i class="bi bi-plus-lg me-1"></i>Ajouter un point
-                    </button>
+
+            <!-- PHASE 0 : BROUILLON -->
+            <?php if ($seance['statut'] === 'brouillon'): ?>
+                <div class="card border-0 shadow-sm text-center py-5">
+                    <div class="card-body">
+                        <i class="bi bi-pencil-square fs-1 text-secondary opacity-50 d-block mb-3"></i>
+                        <h5 class="fw-bold text-dark">Séance en cours de programmation</h5>
+                        <p class="text-muted small mb-0">Cette séance est à l'état de brouillon. La date, le lieu et l'ordre du jour sont susceptibles d'être modifiés à tout moment.</p>
+                    </div>
+                </div>
+
+            <!-- PHASE 1 : DATE FIXÉE -->
+            <?php elseif ($seance['statut'] === 'date_fixee'): ?>
+                <div class="card border-0 shadow-sm text-center py-5">
+                    <div class="card-body">
+                        <i class="bi bi-calendar-event fs-1 text-info opacity-75 d-block mb-3"></i>
+                        <h5 class="fw-bold text-dark">Ordre du jour en cours d'élaboration</h5>
+                        <p class="text-muted small mb-0">La date de cette séance est fixée, mais l'ordre du jour officiel n'a pas encore été arrêté.</p>
+                    </div>
+                </div>
+
+            <!-- PHASES 2 & 3 : ODJ ou DOSSIER DISPONIBLE -->
+            <?php else: ?>
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h4 class="fw-bold mb-0"><i class="bi bi-list-ol me-2 text-primary"></i>Ordre du Jour</h4>
+                    <?php if (!$showDocs): ?>
+                        <span class="badge bg-warning text-dark"><i class="bi bi-hourglass-split me-1"></i>Dossiers en préparation</span>
                     <?php endif; ?>
                 </div>
-                <div class="card-body px-4 pb-4 pt-2">
-                    <?php if (empty($points)): ?>
-                        <div class="text-center py-5 text-muted">
-                            <i class="bi bi-journal-x fs-1 d-block mb-2 opacity-25"></i>
-                            L'ordre du jour est vide.<br>
-                            <small>Ajoutez des points pour structurer la séance.</small>
-                        </div>
-                    <?php else: ?>
-                        <ol class="list-group list-group-numbered list-group-flush">
-                            <?php foreach ($points as $i => $pt):
-                                $tcfg = $typeCfg[$pt['type_point']] ?? ['label' => $pt['type_point'], 'class' => 'bg-secondary'];
-                            ?>
-                            <li class="list-group-item d-flex justify-content-between align-items-start px-0 py-3 border-bottom">
-                                <div class="ms-2 me-auto" style="max-width: calc(100% - 120px);">
-                                    <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
-                                        <span class="fw-bold text-dark"><?= htmlspecialchars($pt['titre']) ?></span>
-                                        <span class="badge <?= $tcfg['class'] ?> small"><?= $tcfg['label'] ?></span>
-                                    </div>
-                                    <?php if (!empty($pt['description'])): ?>
-                                        <p class="small text-muted mb-1"><?= nl2br(htmlspecialchars($pt['description'])) ?></p>
-                                    <?php endif; ?>
-                                    <?php if (!empty($pt['direction_origine'])): ?>
-                                        <small class="text-muted"><i class="bi bi-building me-1"></i><?= htmlspecialchars($pt['direction_origine']) ?></small>
-                                    <?php endif; ?>
-                                </div>
-                                <?php if ($seance['statut'] !== 'terminee'): ?>
-                                <a href="<?= URLROOT ?>/seances/deletePoint/<?= $pt['id'] ?>"
-                                   class="btn btn-sm btn-outline-danger border-0 ms-2 flex-shrink-0"
-                                   onclick="return confirm('Supprimer ce point ?')">
-                                    <i class="bi bi-x-lg"></i>
-                                </a>
+
+                <div class="accordion shadow-sm" id="accordionODJ">
+                    <?php foreach ($points as $i => $pt): 
+                        $docsPoint = array_filter($documents, fn($d) => $d['point_odj_id'] == $pt['id']);
+                    ?>
+                    <div class="accordion-item border-0 border-bottom">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button <?= $i > 0 ? 'collapsed' : '' ?> fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#col_<?= $pt['id'] ?>">
+                                <?= ($i+1) . '. ' . htmlspecialchars($pt['titre']) ?>
+                                <?php if($showDocs && count($docsPoint) > 0): ?>
+                                    <span class="badge bg-secondary ms-3"><i class="bi bi-paperclip me-1"></i><?= count($docsPoint) ?> PJ</span>
                                 <?php endif; ?>
-                            </li>
-                            <?php endforeach; ?>
-                        </ol>
-                    <?php endif; ?>
+                            </button>
+                        </h2>
+                        
+                        <div id="col_<?= $pt['id'] ?>" class="accordion-collapse collapse <?= $i === 0 ? 'show' : '' ?>" data-bs-parent="#accordionODJ">
+                            <div class="accordion-body bg-light">
+                                
+                                <!-- PHASE 2 : ON CACHE LE CONTENU, ON N'AFFICHE QUE LES TITRES -->
+                                <?php if (!$showDocs): ?>
+                                    <div class="text-center py-4">
+                                        <i class="bi bi-lock text-muted fs-3 opacity-50 d-block mb-2"></i>
+                                        <div class="small text-muted fst-italic">L'exposé des motifs et les pièces jointes seront rendus accessibles prochainement.</div>
+                                    </div>
+                                    
+                                <!-- PHASE 3 : ON AFFICHE L'EXPOSÉ DES MOTIFS ET LES PJ -->
+                                <?php else: ?>
+                                    <div class="rich-text-container bg-white p-3 rounded border shadow-sm mb-3">
+                                        <?= $pt['description'] ?: '<em class="text-muted">Aucun exposé des motifs fourni.</em>' ?>
+                                    </div>
+                                    
+                                    <?php if (!empty($docsPoint)): ?>
+                                        <div class="d-flex flex-column gap-2">
+                                            <?php foreach($docsPoint as $doc): 
+                                                $icon = getFileIcon($doc['chemin_fichier']);
+                                            ?>
+                                                <a href="<?= URLROOT ?>/<?= $doc['chemin_fichier'] ?>" target="_blank" class="btn btn-white border text-start shadow-sm d-flex align-items-center p-3 text-dark hover-primary" style="transition: all 0.2s;">
+                                                    <i class="bi <?= $icon['class'] ?> <?= $icon['color'] ?> fs-3 me-3"></i>
+                                                    <div>
+                                                        <div class="fw-bold small"><?= htmlspecialchars($doc['nom']) ?></div>
+                                                        <div class="text-muted" style="font-size:0.7rem;">Cliquer pour consulter</div>
+                                                    </div>
+                                                    <i class="bi bi-download ms-auto text-muted opacity-50"></i>
+                                                </a>
+                                            <?php endforeach; ?>
+                                        </div>
+                                    <?php endif; ?>
+                                <?php endif; ?>
+
+                            </div>
+                        </div>
+                    </div>
+                    <?php endforeach; ?>
                 </div>
-            </div>
+            <?php endif; ?>
         </div>
 
-        <!-- COLONNE LATÉRALE : MEMBRES -->
         <div class="col-lg-4">
-            <div class="card border-0 shadow-sm">
-                <div class="card-header bg-white border-0 pt-4 px-4 pb-2">
-                    <h5 class="fw-bold mb-0">
-                        <i class="bi bi-people me-2 text-success"></i>Membres
-                        <span class="badge bg-success bg-opacity-10 text-success ms-2"><?= count($membres) ?></span>
-                    </h5>
+            <!-- RAPPEL DES MEMBRES CONVOQUÉS -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-white border-0 pt-3 px-3 pb-2 d-flex justify-content-between align-items-center">
+                    <h6 class="fw-bold mb-0 text-muted text-uppercase">Convoqués</h6>
+                    <span class="badge bg-light text-dark border"><?= count($membres) ?> membres</span>
                 </div>
-                <div class="card-body px-4 pb-4 pt-2">
+                <div class="card-body px-3 pb-3 pt-0" style="max-height: 500px; overflow-y: auto;">
                     <?php if (empty($membres)): ?>
-                        <p class="text-muted small text-center py-3">Aucun membre défini pour cette instance.</p>
+                        <p class="text-muted small text-center py-3">Aucun membre rattaché.</p>
                     <?php else: ?>
                         <?php
+                        // Tri pour regrouper par collège
                         $admins    = array_filter($membres, fn($m) => $m['college'] === 'administration');
                         $personnel = array_filter($membres, fn($m) => $m['college'] === 'personnel');
                         ?>
 
+                        <!-- Collège Administration -->
                         <?php if (!empty($admins)): ?>
-                        <p class="small fw-bold text-muted text-uppercase mb-2" style="font-size:0.7rem; letter-spacing:1px;">Collège Administration</p>
-                        <ul class="list-unstyled mb-3">
-                            <?php foreach ($admins as $m): ?>
-                            <li class="d-flex align-items-center gap-2 py-1">
-                                <div class="rounded-circle bg-primary bg-opacity-10 text-primary d-flex align-items-center justify-content-center flex-shrink-0" style="width:30px;height:30px;font-size:0.75rem;font-weight:700;">
-                                    <?= strtoupper(substr($m['prenom'], 0, 1) . substr($m['nom'], 0, 1)) ?>
-                                </div>
-                                <div>
-                                    <div class="small fw-bold lh-1"><?= htmlspecialchars(strtoupper($m['nom']) . ' ' . $m['prenom']) ?></div>
-                                    <?php if (!empty($m['qualite'])): ?>
-                                        <div style="font-size:0.7rem;" class="text-muted"><?= htmlspecialchars($m['qualite']) ?></div>
-                                    <?php endif; ?>
-                                </div>
-                                <span class="ms-auto badge <?= $m['type_mandat'] === 'titulaire' ? 'bg-dark' : 'bg-secondary' ?> small"><?= $m['type_mandat'] === 'titulaire' ? 'T' : 'S' ?></span>
-                            </li>
-                            <?php endforeach; ?>
-                        </ul>
+                            <div class="small fw-bold text-primary mt-2 mb-2 border-bottom pb-1" style="font-size: 0.75rem;">
+                                Collège Administration
+                            </div>
+                            <ul class="list-unstyled mb-3 small">
+                                <?php foreach ($admins as $m): ?>
+                                    <li class="d-flex justify-content-between align-items-center py-1">
+                                        <span class="text-truncate pe-2">
+                                            <i class="bi bi-person text-muted me-1"></i>
+                                            <?= htmlspecialchars(strtoupper($m['nom']) . ' ' . $m['prenom']) ?>
+                                        </span>
+                                        <span class="badge <?= $m['type_mandat'] === 'titulaire' ? 'bg-dark' : 'bg-secondary' ?> bg-opacity-75" style="font-size: 0.65rem;">
+                                            <?= $m['type_mandat'] === 'titulaire' ? 'Titulaire' : 'Suppléant' ?>
+                                        </span>
+                                    </li>
+                                <?php endforeach; ?>
+                            </ul>
                         <?php endif; ?>
 
+                        <!-- Collège Personnel -->
                         <?php if (!empty($personnel)): ?>
-                        <p class="small fw-bold text-muted text-uppercase mb-2" style="font-size:0.7rem; letter-spacing:1px;">Collège Personnel</p>
-                        <ul class="list-unstyled mb-0">
-                            <?php foreach ($personnel as $m): ?>
-                            <li class="d-flex align-items-center gap-2 py-1">
-                                <div class="rounded-circle bg-success bg-opacity-10 text-success d-flex align-items-center justify-content-center flex-shrink-0" style="width:30px;height:30px;font-size:0.75rem;font-weight:700;">
-                                    <?= strtoupper(substr($m['prenom'], 0, 1) . substr($m['nom'], 0, 1)) ?>
-                                </div>
-                                <div>
-                                    <div class="small fw-bold lh-1"><?= htmlspecialchars(strtoupper($m['nom']) . ' ' . $m['prenom']) ?></div>
-                                    <?php if (!empty($m['qualite'])): ?>
-                                        <div style="font-size:0.7rem;" class="text-muted"><?= htmlspecialchars($m['qualite']) ?></div>
-                                    <?php endif; ?>
-                                </div>
-                                <span class="ms-auto badge <?= $m['type_mandat'] === 'titulaire' ? 'bg-dark' : 'bg-secondary' ?> small"><?= $m['type_mandat'] === 'titulaire' ? 'T' : 'S' ?></span>
-                            </li>
-                            <?php endforeach; ?>
-                        </ul>
+                            <div class="small fw-bold text-success mb-2 border-bottom pb-1" style="font-size: 0.75rem;">
+                                Collège Personnel
+                            </div>
+                            <ul class="list-unstyled mb-0 small">
+                                <?php foreach ($personnel as $m): ?>
+                                    <li class="d-flex justify-content-between align-items-center py-1">
+                                        <span class="text-truncate pe-2">
+                                            <i class="bi bi-person text-muted me-1"></i>
+                                            <?= htmlspecialchars(strtoupper($m['nom']) . ' ' . $m['prenom']) ?>
+                                        </span>
+                                        <span class="badge <?= $m['type_mandat'] === 'titulaire' ? 'bg-dark' : 'bg-secondary' ?> bg-opacity-75" style="font-size: 0.65rem;">
+                                            <?= $m['type_mandat'] === 'titulaire' ? 'Titulaire' : 'Suppléant' ?>
+                                        </span>
+                                    </li>
+                                <?php endforeach; ?>
+                            </ul>
                         <?php endif; ?>
                     <?php endif; ?>
                 </div>
             </div>
         </div>
-
     </div>
 </div>
 
-<!-- MODALE : AJOUTER UN POINT ODJ -->
-<div class="modal fade" id="addPointModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content border-0 shadow">
-            <form action="<?= URLROOT ?>/seances/addPoint/<?= $seance['id'] ?>" method="POST">
-                <div class="modal-header bg-light border-0">
-                    <h5 class="modal-title fw-bold"><i class="bi bi-journal-plus me-2 text-primary"></i>Ajouter un point</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body p-4">
-                    <div class="mb-3">
-                        <label class="form-label small fw-bold">Titre du point <span class="text-danger">*</span></label>
-                        <input type="text" name="titre" class="form-control" placeholder="Ex : Bilan annuel de la formation..." required>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label small fw-bold">Type de point</label>
-                        <select name="type_point" class="form-select">
-                            <option value="information">Information</option>
-                            <option value="deliberation">Délibération</option>
-                            <option value="vote">Vote</option>
-                            <option value="divers">Divers</option>
-                        </select>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label small fw-bold">Direction / Service à l'origine</label>
-                        <input type="text" name="direction_origine" class="form-control" placeholder="Ex : DRH, Direction Générale...">
-                    </div>
-                    <div class="mb-1">
-                        <label class="form-label small fw-bold">Description / développement</label>
-                        <textarea name="description" class="form-control" rows="3" placeholder="Contexte, détails..."></textarea>
-                    </div>
-                </div>
-                <div class="modal-footer border-0 bg-light">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
-                    <button type="submit" class="btn btn-primary fw-bold px-4">
-                        <i class="bi bi-check-lg me-1"></i>Ajouter
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
-<script>
-function toggleQuorum(checkbox, seanceId) {
-    const label = checkbox.nextElementSibling;
-    const attained = checkbox.checked ? 1 : 0;
-    
-    fetch('<?= URLROOT ?>/seances/quorum/' + seanceId + '?attained=' + attained)
-        .then(() => {
-            label.textContent = attained ? 'Quorum atteint ✓' : 'Quorum non atteint';
-            label.className = 'form-check-label small fw-bold ' + (attained ? 'text-success' : 'text-muted');
-        });
+<style>
+/* Léger effet de survol sur les documents */
+.hover-primary:hover {
+    border-color: #0d6efd !important;
+    background-color: #f8fbff !important;
 }
-</script>
+.hover-primary:hover .bi-download {
+    opacity: 1 !important;
+    color: #0d6efd !important;
+}
+
+/* Personnalisation de la barre de défilement (scroll) de la carte des membres */
+.card-body::-webkit-scrollbar {
+    width: 6px;
+}
+.card-body::-webkit-scrollbar-track {
+    background: #f1f1f1; 
+    border-radius: 4px;
+}
+.card-body::-webkit-scrollbar-thumb {
+    background: #c1c1c1; 
+    border-radius: 4px;
+}
+.card-body::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8; 
+}
+
+.rich-text-container {
+    font-size: 0.875em;  /* Équivalent de la classe .small */
+    color: #6c757d;      /* Équivalent de la classe .text-muted */
+    margin-bottom: 1rem; /* Équivalent de la classe .mb-3 */
+}
+.rich-text-container p, 
+.rich-text-container ul, 
+.rich-text-container ol {
+    font-size: inherit;
+    color: inherit;
+    margin-bottom: 0.5rem; /* Espace réduit entre les paragraphes */
+}
+.rich-text-container p:last-child,
+.rich-text-container ul:last-child {
+    margin-bottom: 0; /* Pas de marge sous le dernier élément */
+}
+.rich-text-container a {
+    color: #0d6efd; /* Garder les liens bleus si besoin */
+}
+
+</style>
 
 <?php require_once __DIR__ . '/../layouts/footer.php'; ?>

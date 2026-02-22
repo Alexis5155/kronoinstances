@@ -46,7 +46,7 @@ class Seance {
     }
 
     public function create($instanceId, $date, $heure, $lieu) {
-        $stmt = $this->db->prepare("INSERT INTO seances (instance_id, date_seance, heure_debut, lieu, statut) VALUES (?, ?, ?, ?, 'planifiee')");
+        $stmt = $this->db->prepare("INSERT INTO seances (instance_id, date_seance, heure_debut, lieu, statut) VALUES (?, ?, ?, ?, 'brouillon')");
         if ($stmt->execute([$instanceId, $date, $heure, $lieu])) {
             return $this->db->lastInsertId();
         }
