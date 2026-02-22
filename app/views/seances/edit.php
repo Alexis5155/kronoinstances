@@ -36,12 +36,22 @@ $typeCfg = [
 ?>
 
 <div class="container py-4">
+    
+    <!-- TOP ACTIONS : Tag et Aperçu -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-3 py-2 fs-6 shadow-sm">
+            <i class="bi bi-gear-fill me-2"></i>Gestion de Séance
+        </span>
+        <a href="<?= URLROOT ?>/seances/view/<?= $seance['id'] ?>" class="btn btn-outline-secondary shadow-sm fw-bold bg-white">
+            <i class="bi bi-eye me-2"></i>Aperçu côté membres
+        </a>
+    </div>
+
     <!-- EN-TÊTE GESTION AVEC WORKFLOW -->
     <div class="card border-0 shadow-sm mb-4 border-top border-4 border-primary">
         <div class="card-body p-4">
             <div class="row align-items-center">
                 <div class="col-md-7">
-                    <span class="badge bg-primary bg-opacity-10 text-primary mb-2 border border-primary"><i class="bi bi-gear-fill me-1"></i>Gestion de Séance</span>
                     <h3 class="fw-bold mb-1"><i class="bi bi-building me-2 text-primary"></i><?= htmlspecialchars($seance['instance_nom']) ?></h3>
                     <p class="mb-0 text-muted fs-5">
                         <i class="bi bi-calendar-event me-2"></i><?= $dateObj->format('d/m/Y') ?> à <?= $dateObj->format('H\hi') ?>
@@ -49,9 +59,9 @@ $typeCfg = [
                 </div>
                 
                 <div class="col-md-5 text-md-end mt-3 mt-md-0">
-                    <div class="mb-2">Statut actuel : <span class="badge <?= $s['class'] ?> fs-6"><i class="bi <?= $s['icon'] ?> me-1"></i><?= $s['label'] ?></span></div>
+                    <div class="mb-2">Statut : <span class="badge <?= $s['class'] ?> fs-6"><i class="bi <?= $s['icon'] ?> me-1"></i><?= $s['label'] ?></span></div>
                     
-                    <!-- BOUTONS DE WORKFLOW -->
+                    <!-- BOUTONS D'ACTION DU WORKFLOW -->
                     <div class="d-flex justify-content-md-end gap-2 flex-wrap mt-3">
                         
                         <!-- ÉTAPE 0 : BROUILLON -->
@@ -63,9 +73,8 @@ $typeCfg = [
                         <!-- ÉTAPE 1 : DATE FIXÉE -->
                         <?php elseif ($seance['statut'] === 'date_fixee'): ?>
                             <a href="#" onclick="showConfirmModal('<?= URLROOT ?>/seances/changeStatut/<?= $seance['id'] ?>?statut=brouillon', 'Repasser en brouillon ? La séance ne sera plus visible par les membres.')" class="btn btn-outline-secondary fw-bold shadow-sm">
-                                <i class="bi bi-arrow-counterclockwise me-1"></i> Repasser en brouillon
+                                <i class="bi bi-arrow-counterclockwise me-1"></i> Brouillon
                             </a>
-                            
                             <a href="#" onclick="showConfirmModal('<?= URLROOT ?>/seances/changeStatut/<?= $seance['id'] ?>?statut=odj_valide', 'Valider l\'Ordre du jour ? Les membres pourront voir la liste des points.')" class="btn btn-primary fw-bold shadow-sm">
                                 Étape 2 : Publier l'ODJ <i class="bi bi-arrow-right ms-1"></i>
                             </a>
@@ -75,7 +84,6 @@ $typeCfg = [
                             <a href="#" onclick="showConfirmModal('<?= URLROOT ?>/seances/changeStatut/<?= $seance['id'] ?>?statut=date_fixee', 'Annuler la publication de l\'ODJ ? Les membres ne verront plus les points.')" class="btn btn-outline-secondary fw-bold shadow-sm">
                                 <i class="bi bi-arrow-counterclockwise me-1"></i> Rétrograder
                             </a>
-                            
                             <a href="#" onclick="showConfirmModal('<?= URLROOT ?>/seances/changeStatut/<?= $seance['id'] ?>?statut=dossier_disponible', 'Publier le dossier complet ? Les membres auront accès aux exposés et aux pièces jointes.')" class="btn btn-success fw-bold shadow-sm">
                                 Étape 3 : Publier le dossier <i class="bi bi-arrow-right ms-1"></i>
                             </a>
@@ -85,7 +93,6 @@ $typeCfg = [
                             <a href="#" onclick="showConfirmModal('<?= URLROOT ?>/seances/changeStatut/<?= $seance['id'] ?>?statut=odj_valide', 'Masquer le dossier complet ? Les PJ et les exposés des motifs seront à nouveau masqués.')" class="btn btn-outline-secondary fw-bold shadow-sm">
                                 <i class="bi bi-arrow-counterclockwise me-1"></i> Rétrograder
                             </a>
-                            
                             <a href="#" onclick="showConfirmModal('<?= URLROOT ?>/seances/changeStatut/<?= $seance['id'] ?>?statut=en_cours', 'Démarrer la séance maintenant et ouvrir le bureau en direct ?')" class="btn btn-warning fw-bold shadow-sm text-dark">
                                 Démarrer la séance <i class="bi bi-play-fill ms-1"></i>
                             </a>
@@ -93,13 +100,11 @@ $typeCfg = [
                         <!-- ÉTAPE 4 : SÉANCE EN COURS (LIVE) -->
                         <?php elseif ($seance['statut'] === 'en_cours'): ?>
                             <a href="#" onclick="showConfirmModal('<?= URLROOT ?>/seances/changeStatut/<?= $seance['id'] ?>?statut=dossier_disponible', 'Annuler le démarrage ? La séance repassera en mode préparation.')" class="btn btn-outline-secondary fw-bold shadow-sm">
-                                <i class="bi bi-arrow-counterclockwise me-1"></i> Annuler le Live
+                                <i class="bi bi-arrow-counterclockwise me-1"></i> Quitter Live
                             </a>
-
                             <a href="<?= URLROOT ?>/seances/live/<?= $seance['id'] ?>" class="btn btn-danger fw-bold shadow-sm">
-                                <i class="bi bi-record-circle-fill me-1" style="animation: pulse-red 2s infinite;"></i>Reprendre le Live
+                                <i class="bi bi-record-circle-fill me-1" style="animation: pulse-red 2s infinite;"></i>Reprendre Live
                             </a>
-                            
                             <a href="#" onclick="showConfirmModal('<?= URLROOT ?>/seances/changeStatut/<?= $seance['id'] ?>?statut=terminee', 'Clôturer la séance définitivement ?')" class="btn btn-dark fw-bold shadow-sm">
                                 <i class="bi bi-stop-fill me-1"></i>Clôturer
                             </a>
@@ -109,15 +114,71 @@ $typeCfg = [
                             <a href="#" onclick="showConfirmModal('<?= URLROOT ?>/seances/changeStatut/<?= $seance['id'] ?>?statut=en_cours', 'Rouvrir la séance ? Vous pourrez à nouveau éditer les votes et le PV.')" class="btn btn-outline-danger fw-bold shadow-sm">
                                 <i class="bi bi-unlock-fill me-1"></i> Rouvrir la séance
                             </a>
-                        <?php endif; ?>                        
+                        <?php endif; ?>
                     </div>
                 </div>
             </div>
             
-            <hr class="text-muted my-3">
-            <a href="<?= URLROOT ?>/seances/view/<?= $seance['id'] ?>" class="btn btn-sm btn-outline-secondary">
-                <i class="bi bi-eye me-1"></i>Voir l'aperçu côté membres
-            </a>
+            <hr class="text-muted my-4 opacity-25">
+            
+            <!-- BARRE DE PROGRESSION VISUELLE (STEPPER) -->
+            <?php 
+            $steps = [
+                'brouillon'          => 'Brouillon',
+                'date_fixee'         => 'Date fixée',
+                'odj_valide'         => 'ODJ validé',
+                'dossier_disponible' => 'Dossier',
+                'en_cours'           => 'En Live',
+                'terminee'           => 'Terminée'
+            ];
+            $currentStatusIndex = array_search($seance['statut'], array_keys($steps));
+            // Pourcentage de progression de la ligne bleue
+            $progressPct = ($currentStatusIndex / (count($steps) - 1)); 
+            ?>
+            <div class="position-relative mt-2 mb-2">
+                <!-- Ligne grise de fond -->
+                <div class="position-absolute" style="top: 15px; left: 40px; right: 40px; height: 3px; background-color: #e9ecef; z-index: 1;"></div>
+                
+                <!-- Ligne bleue de progression dynamique -->
+                <div class="position-absolute rounded" style="top: 15px; left: 40px; width: calc((100% - 80px) * <?= $progressPct ?>); height: 3px; background-color: #0d6efd; z-index: 2; transition: width 0.5s ease;"></div>
+                
+                <!-- Les points -->
+                <div class="d-flex justify-content-between position-relative" style="z-index: 3;">
+                    <?php 
+                    $stepIndex = 0;
+                    foreach ($steps as $key => $label): 
+                        $isCompleted = $stepIndex < $currentStatusIndex;
+                        $isActive = $stepIndex === $currentStatusIndex;
+                        
+                        $circleClass = '';
+                        $borderStyle = '';
+                        
+                        if ($isCompleted) {
+                            $circleClass = 'bg-primary border-primary text-white';
+                        } elseif ($isActive) {
+                            $circleClass = 'bg-primary border-primary text-white shadow';
+                        } else {
+                            $circleClass = 'bg-white text-muted';
+                            $borderStyle = 'border-color: #ced4da !important;';
+                        }
+                        
+                        $iconOrNum = $isCompleted ? '<i class="bi bi-check-lg"></i>' : ($stepIndex + 1);
+                        $labelClass = ($isCompleted || $isActive) ? 'text-dark fw-bold' : 'text-muted opacity-75';
+                    ?>
+                        <div class="text-center" style="width: 80px;">
+                            <div class="rounded-circle border border-2 d-flex align-items-center justify-content-center mx-auto mb-2 <?= $circleClass ?>" 
+                                 style="width: 32px; height: 32px; transition: all 0.3s ease; <?= $borderStyle ?>">
+                                <?= $iconOrNum ?>
+                            </div>
+                            <div class="small <?= $labelClass ?>" style="font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.5px;"><?= $label ?></div>
+                        </div>
+                    <?php 
+                        $stepIndex++;
+                    endforeach; 
+                    ?>
+                </div>
+            </div>
+
         </div>
     </div>
 
