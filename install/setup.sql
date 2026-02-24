@@ -2,7 +2,7 @@
 -- SCHEMA DE LA BASE DE DONNÉES KRONOINSTANCES
 -- ==========================================
 
--- 1. Table des Rôles (Admin, RH, Elu, Syndicat...)
+-- 1. Table des Rôles
 CREATE TABLE IF NOT EXISTS roles (
     id INT AUTO_INCREMENT PRIMARY KEY,
     nom VARCHAR(50) NOT NULL UNIQUE,

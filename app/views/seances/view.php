@@ -85,7 +85,8 @@ function getFileIcon($filename) {
                     ?>
                     <div class="accordion-item border-0 border-bottom">
                         <h2 class="accordion-header">
-                            <button class="accordion-button <?= $i > 0 ? 'collapsed' : '' ?> fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#col_<?= $pt['id'] ?>">
+                            <!-- CORRECTION DU BUG D'ACCORDÉON : La classe `collapsed` est forcée et permanente -->
+                            <button class="accordion-button collapsed fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#col_<?= $pt['id'] ?>">
                                 <?= ($i+1) . '. ' . htmlspecialchars($pt['titre']) ?>
                                 <?php if($showDocs && count($docsPoint) > 0): ?>
                                     <span class="badge bg-secondary ms-3"><i class="bi bi-paperclip me-1"></i><?= count($docsPoint) ?> PJ</span>
@@ -93,7 +94,8 @@ function getFileIcon($filename) {
                             </button>
                         </h2>
                         
-                        <div id="col_<?= $pt['id'] ?>" class="accordion-collapse collapse <?= $i === 0 ? 'show' : '' ?>" data-bs-parent="#accordionODJ">
+                        <!-- CORRECTION DU BUG D'ACCORDÉON : Retrait de l'affichage forcé (show) du 1er point -->
+                        <div id="col_<?= $pt['id'] ?>" class="accordion-collapse collapse" data-bs-parent="#accordionODJ">
                             <div class="accordion-body bg-light">
                                 
                                 <!-- PHASE 2 : ON CACHE LE CONTENU, ON N'AFFICHE QUE LES TITRES -->
@@ -132,6 +134,28 @@ function getFileIcon($filename) {
                     </div>
                     <?php endforeach; ?>
                 </div>
+                
+                <?php 
+                // CONVOCATION FIGÉE - VISIBLE POUR LES MEMBRES (Apparaît sous l'accordéon)
+                $convocSigneePath = 'uploads/seances/' . $seance['id'] . '/convocation_signee.pdf';
+                if (file_exists($convocSigneePath)): 
+                ?>
+                    <div class="card border-0 border-start border-4 border-warning bg-white shadow-sm mt-4">
+                        <div class="card-body p-3 d-flex align-items-center gap-3">
+                            <div class="bg-warning bg-opacity-10 p-2 rounded d-flex align-items-center justify-content-center" style="width: 45px; height: 45px;">
+                                <i class="bi bi-file-earmark-pdf-fill text-danger fs-4"></i>
+                            </div>
+                            <div class="flex-grow-1">
+                                <h6 class="fw-bold mb-0 text-dark">Convocation officielle signée</h6>
+                                <div class="text-muted small">Télécharger la version PDF</div>
+                            </div>
+                            <a href="<?= URLROOT ?>/<?= $convocSigneePath ?>" target="_blank" class="btn btn-outline-dark fw-bold btn-sm shadow-sm px-3">
+                                <i class="bi bi-download me-1"></i> PDF
+                            </a>
+                        </div>
+                    </div>
+                <?php endif; ?>
+
             <?php endif; ?>
         </div>
 

@@ -183,6 +183,42 @@ class Admin extends Controller {
             $this->redirect('admin/instances');
         }
 
+        // --- UPLOAD DU MODÈLE DE CONVOCATION (.ODT) ---
+        if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['upload_modele'])) {
+            $instanceId = (int)$_POST['instance_id'];
+            if (isset($_FILES['modele_odt']) && $_FILES['modele_odt']['error'] === UPLOAD_ERR_OK) {
+                $ext = strtolower(pathinfo($_FILES['modele_odt']['name'], PATHINFO_EXTENSION));
+                if ($ext !== 'odt') {
+                    setToast("Le modèle doit obligatoirement être un fichier au format .odt", "danger");
+                } else {
+                    $uploadDir = 'uploads/modeles/';
+                    if (!is_dir($uploadDir)) { mkdir($uploadDir, 0777, true); }
+                    
+                    // On force ce nom précis pour s'affranchir de la base de données
+                    $destPath = $uploadDir . 'modele_instance_' . $instanceId . '.odt';
+                    if (move_uploaded_file($_FILES['modele_odt']['tmp_name'], $destPath)) {
+                        Log::add('UPDATE_INSTANCE', "Upload du modèle de convocation pour l'instance ID: " . $instanceId);
+                        setToast("Le modèle de convocation a été enregistré avec succès.");
+                    } else {
+                        setToast("Erreur système lors de l'enregistrement du fichier.", "danger");
+                    }
+                }
+            }
+            $this->redirect('admin/instances');
+        }
+        
+        // --- SUPPRESSION DU MODÈLE DE CONVOCATION ---
+        if (isset($_GET['delete_modele_id'])) {
+            $targetId = (int)$_GET['delete_modele_id'];
+            $path = 'uploads/modeles/modele_instance_' . $targetId . '.odt';
+            if (file_exists($path)) {
+                unlink($path);
+                Log::add('UPDATE_INSTANCE', "Suppression du modèle de convocation pour l'instance ID: " . $targetId);
+                setToast("Modèle de convocation supprimé.");
+            }
+            $this->redirect('admin/instances');
+        }
+
         // --- PRÉPARATION DES DONNÉES POUR LA VUE ---
         $instances = $instanceModel->getAll();
         

@@ -6,6 +6,7 @@ use app\models\Seance;
 use app\models\Instance;
 use app\models\PointOdj;
 use app\models\Log;
+use app\core\Mailer;
 
 class Seances extends Controller {
 
@@ -120,6 +121,7 @@ class Seances extends Controller {
 
     /**
      * Changer le statut d'une séance
+     * Déclenche l'envoi des convocations lors du passage à 'odj_valide'
      */
     public function changeStatut($seanceId) {
         $statut = $_GET['statut'] ?? null;
@@ -130,16 +132,165 @@ class Seances extends Controller {
             $seanceModel->updateStatut($seanceId, $statut);
             Log::add('UPDATE_SEANCE_STATUT', "Séance ID $seanceId passée au statut : $statut");
             setToast("Le statut de la séance a été mis à jour.");
-            
-            // Si on vient de démarrer la séance, on redirige directement sur le Live !
+
+            // ENVOI DES CONVOCATIONS lors de la publication de l'ODJ
+            if ($statut === 'odj_valide') {
+                $this->envoyerConvocations($seanceId);
+            }
+
+            // Si on vient de démarrer la séance, on redirige sur le Live
             if ($statut === 'en_cours') {
                 $this->redirect('seances/live/' . $seanceId);
                 return;
             }
         }
-        $this->redirect('seances/view/' . $seanceId);
+        // Correction : on redirige sur edit (pas view) pour rester en mode gestion
+        $this->redirect('seances/edit/' . $seanceId);
     }
 
+    /**
+     * Envoie les convocations à tous les membres titulaires de l'instance
+     */
+    private function envoyerConvocations($seanceId) {
+        $seanceModel   = new Seance();
+        $pointModel    = new PointOdj();
+        $instanceModel = new Instance();
+
+        $seance  = $seanceModel->getById($seanceId);
+        $points  = $pointModel->getBySeance($seanceId);
+        $membres = $seanceModel->getMembresAvecEmail($seance['instance_id']);
+
+        if (empty($membres)) return;
+
+        $dateObj = new \DateTime($seance['date_seance'] . ' ' . $seance['heure_debut']);
+        $dateFormatee = $dateObj->format('d/m/Y à H\hi');
+        $lienConsultation = URLROOT . '/seances/view/' . $seanceId;
+
+        // Construction de l'ODJ en HTML pour le corps du mail
+        $listeOdj = '';
+        foreach ($points as $i => $pt) {
+            $typeCfg = [
+                'information'  => '#17a2b8',
+                'deliberation' => '#0d6efd',
+                'vote'         => '#dc3545',
+                'divers'       => '#6c757d',
+            ];
+            $couleur = $typeCfg[$pt['type_point']] ?? '#6c757d';
+            $listeOdj .= '
+                <tr>
+                    <td style="padding: 10px 12px; border-bottom: 1px solid #f0f0f0; font-size: 14px; color: #333;">
+                        <strong style="color: #0d6efd;">' . ($i + 1) . '.</strong> 
+                        ' . htmlspecialchars($pt['titre']) . '
+                    </td>
+                    <td style="padding: 10px 12px; border-bottom: 1px solid #f0f0f0; text-align: right;">
+                        <span style="background-color:' . $couleur . '; color:#fff; font-size:11px; padding: 2px 8px; border-radius: 20px;">
+                            ' . ucfirst($pt['type_point']) . '
+                        </span>
+                    </td>
+                </tr>';
+        }
+
+        $nbEnvoyes = 0;
+        $nbEchecs  = 0;
+
+        foreach ($membres as $membre) {
+            if (empty($membre['email'])) continue;
+
+            $nomComplet = strtoupper($membre['nom']) . ' ' . $membre['prenom'];
+            $subject    = "Convocation – " . $seance['instance_nom'] . " – " . $dateObj->format('d/m/Y');
+
+            // Template HTML de la convocation
+            $body = '
+            <!DOCTYPE html>
+            <html lang="fr">
+            <head><meta charset="UTF-8"></head>
+            <body style="margin:0; padding:0; background-color:#f4f6f8; font-family: Arial, sans-serif;">
+                <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f6f8; padding: 30px 0;">
+                    <tr><td align="center">
+                        <table width="620" cellpadding="0" cellspacing="0" style="background-color:#ffffff; border-radius: 8px; overflow:hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+                            
+                            <!-- EN-TÊTE BLEU -->
+                            <tr>
+                                <td style="background: linear-gradient(135deg, #0d6efd, #0a58ca); padding: 30px 40px; text-align: center;">
+                                    <h1 style="color: #333; margin:0; font-size: 22px; font-weight: bold; letter-spacing: 1px;">CONVOCATION</h1>
+                                    <p style="color: #333; margin: 8px 0 0 0; font-size: 14px;">' . htmlspecialchars($seance['instance_nom']) . '</p>
+                                </td>
+                            </tr>
+
+                            <!-- CORPS -->
+                            <tr>
+                                <td style="padding: 35px 40px;">
+                                    <p style="color: #333; font-size: 15px; margin-top:0;">Madame, Monsieur <strong>' . $nomComplet . '</strong>,</p>
+                                    <p style="color: #555; font-size: 14px; line-height: 1.7;">
+                                        Vous êtes convoqué(e) à la réunion de <strong>' . htmlspecialchars($seance['instance_nom']) . '</strong> 
+                                        qui se tiendra le :
+                                    </p>
+
+                                    <!-- ENCART DATE -->
+                                    <table width="100%" cellpadding="0" cellspacing="0" style="margin: 20px 0;">
+                                        <tr>
+                                            <td style="background-color: #f0f5ff; border-left: 4px solid #0d6efd; border-radius: 4px; padding: 15px 20px;">
+                                                <p style="margin:0; font-size: 18px; font-weight: bold; color: #0d6efd;">📅 ' . $dateFormatee . '</p>
+                                                ' . (!empty($seance['lieu']) ? '<p style="margin: 5px 0 0 0; font-size: 13px; color: #555;">📍 ' . htmlspecialchars($seance['lieu']) . '</p>' : '') . '
+                                            </td>
+                                        </tr>
+                                    </table>
+
+                                    <!-- ORDRE DU JOUR -->
+                                    <p style="color: #333; font-size: 14px; font-weight: bold; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">Ordre du Jour</p>
+                                    <table width="100%" cellpadding="0" cellspacing="0" style="border: 1px solid #e9ecef; border-radius: 6px; overflow: hidden;">
+                                        ' . ($listeOdj ?: '<tr><td style="padding: 12px; color: #999; font-size: 13px; font-style: italic;">L\'ordre du jour complet sera communiqué prochainement.</td></tr>') . '
+                                    </table>
+
+                                    <!-- LIEN DE CONSULTATION -->
+                                    <p style="color: #555; font-size: 14px; line-height: 1.7; margin-top: 25px;">
+                                        Vous pouvez consulter le dossier de séance en ligne en cliquant sur le bouton ci-dessous, 
+                                        une fois celui-ci mis à disposition.
+                                    </p>
+                                    <table cellpadding="0" cellspacing="0" style="margin: 10px 0 20px 0;">
+                                        <tr>
+                                            <td style="background-color:#0d6efd; border-radius: 6px; padding: 12px 28px;">
+                                                <a href="' . $lienConsultation . '" style="color:#ffffff; text-decoration:none; font-size:14px; font-weight:bold;">
+                                                    Accéder au dossier de séance →
+                                                </a>
+                                            </td>
+                                        </tr>
+                                    </table>
+
+                                </td>
+                            </tr>
+
+                            <!-- PIED DE PAGE -->
+                            <tr>
+                                <td style="background-color: #f8f9fa; padding: 18px 40px; text-align: center; border-top: 1px solid #e9ecef;">
+                                    <p style="color: #aaa; font-size: 12px; margin: 0;">
+                                        Cet e-mail a été envoyé automatiquement par KronoInstances. Merci de ne pas y répondre directement.
+                                    </p>
+                                </td>
+                            </tr>
+
+                        </table>
+                    </td></tr>
+                </table>
+            </body>
+            </html>';
+
+            if (Mailer::send($membre['email'], $subject, $body)) {
+                $nbEnvoyes++;
+            } else {
+                $nbEchecs++;
+            }
+        }
+
+        // Toast de résumé
+        if ($nbEchecs === 0) {
+            setToast("✅ Convocations envoyées à $nbEnvoyes membre(s) avec succès.");
+        } else {
+            setToast("⚠️ $nbEnvoyes convocation(s) envoyée(s), $nbEchecs échec(s). Vérifiez les adresses e-mail.", "warning");
+        }
+
+        Log::add('CONVOCATIONS_ENVOYEES', "Séance ID $seanceId : $nbEnvoyes envoi(s), $nbEchecs échec(s).");
+    }
 
     /**
      * Mettre à jour l'état du Quorum via AJAX
@@ -433,5 +584,124 @@ class Seances extends Controller {
         }
     }
 
+    /**
+     * Génère la convocation pré-remplie au format ODT de façon sécurisée
+     */
+    public function generateConvocation($seanceId) {
+        // 1. Instanciation des modèles et récupération des données
+        $seanceModel = new \app\models\Seance(); 
+        $seance = $seanceModel->getById($seanceId);
+        
+        if (!$seance) {
+            $this->redirect('seances'); 
+            return;
+        }
 
+        // 2. Vérification de l'existence du modèle physique
+        $modelePath = dirname(dirname(__DIR__)) . '/uploads/modeles/modele_instance_' . $seance['instance_id'] . '.odt';
+        if (!file_exists($modelePath)) {
+            setToast("Le modèle de convocation est introuvable sur le serveur.", "danger");
+            $this->redirect('seances/edit/' . $seanceId);
+            return;
+        }
+
+        // 3. Création sécurisée d'un fichier temporaire de travail
+        $tempFile = tempnam(sys_get_temp_dir(), 'KRONO_');
+        if (!copy($modelePath, $tempFile)) {
+            setToast("Impossible de copier le modèle temporairement.", "danger");
+            $this->redirect('seances/edit/' . $seanceId);
+            return;
+        }
+
+        // 4. Ouverture et extraction du XML de l'archive ODT
+        $zip = new \ZipArchive();
+        if ($zip->open($tempFile) !== true) {
+            setToast("Le fichier modèle est corrompu.", "danger");
+            unlink($tempFile);
+            $this->redirect('seances/edit/' . $seanceId);
+            return;
+        }
+
+        $content = $zip->getFromName('content.xml');
+        if ($content === false) {
+            setToast("Le contenu du fichier ODT est invalide.", "danger");
+            $zip->close();
+            unlink($tempFile);
+            $this->redirect('seances/edit/' . $seanceId);
+            return;
+        }
+
+        // 5. Préparation des variables à injecter
+        $dateStr = date('d/m/Y', strtotime($seance['date_seance']));
+        $heureStr = date('H\hi', strtotime($seance['heure_debut']));
+        
+        // Construction de l'ordre du jour avec la syntaxe de saut de ligne propre à LibreOffice
+        $pointModel = new \app\models\PointOdj();
+        $points = $pointModel->getBySeance($seanceId);
+        
+        $listeOdj = "";
+        if (!empty($points)) {
+            foreach ($points as $index => $pt) {
+                if ($index > 0) {
+                    $listeOdj .= '<text:tab/><text:line-break/>'; 
+                }
+                // On échappe le titre pour éviter de casser le document XML s'il contient des & ou <
+                $listeOdj .= ($index + 1) . '. ' . htmlspecialchars($pt['titre'], ENT_QUOTES, 'UTF-8');
+            }
+        } else {
+            $listeOdj = "Aucun point inscrit à l'ordre du jour.";
+        }
+
+        // Dictionnaire des tags à remplacer avec leurs valeurs échappées
+        $replacements = [
+            '{INSTANCE}' => htmlspecialchars($seance['instance_nom'] ?? '', ENT_QUOTES, 'UTF-8'),
+            '{DATE}'     => htmlspecialchars($dateStr, ENT_QUOTES, 'UTF-8'),
+            '{HEURE}'    => htmlspecialchars($heureStr, ENT_QUOTES, 'UTF-8'),
+            '{LIEU}'     => htmlspecialchars($seance['lieu'] ?? '', ENT_QUOTES, 'UTF-8'),
+            '{ODJ}'      => $listeOdj // L'ODJ contient déjà du XML valide, on ne le ré-échappe pas
+        ];
+
+        // 6. Remplacement des tags (Parade contre la fragmentation XML de LibreOffice)
+        // Construit une règle regex stricte : cherche "{" + XML optionnel + "I" + XML optionnel + ... + "}"
+        foreach ($replacements as $tag => $value) {
+            $regex = '/\{(?:\s*<[^>]+>\s*)*';
+            foreach (str_split($tag) as $char) {
+                $regex .= preg_quote($char, '/');
+                $regex .= '(?:\s*<[^>]+>\s*)*';
+            }
+            $regex .= '\}/u';
+            
+            $content = preg_replace($regex, $value, $content);
+        }
+
+        // 7. Sauvegarde dans l'archive
+        $zip->addFromString('content.xml', $content);
+        $zip->close(); // Écrit réellement sur le disque
+
+        // 8. Forcer le téléchargement proprement
+        // On purge la mémoire tampon de PHP de toute ligne blanche générée par d'autres fichiers
+        while (ob_get_level()) {
+            ob_end_clean();
+        }
+
+        // On force PHP à relire la vraie taille du fichier (sinon il croit toujours qu'il fait 0 octet)
+        clearstatcache(true, $tempFile);
+
+        // Nom de fichier propre et headers HTTP stricts
+        $safeName = preg_replace('/[^a-zA-Z0-9_\-]/', '_', $seance['instance_nom']);
+        $safeDate = str_replace('/', '-', $dateStr);
+        $filename = "Convocation_{$safeName}_{$safeDate}.odt";
+
+        header('Content-Type: application/vnd.oasis.opendocument.text');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Content-Transfer-Encoding: binary');
+        header('Cache-Control: must-revalidate, post-check=0, pre-check=0');
+        header('Pragma: public');
+        header('Content-Length: ' . filesize($tempFile)); // Maintenant PHP lira la vraie taille
+        
+        // Envoi au navigateur puis nettoyage du serveur
+        readfile($tempFile);
+        unlink($tempFile);
+        exit;
+    }
 }

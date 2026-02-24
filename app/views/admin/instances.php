@@ -55,6 +55,11 @@
             </div>
         <?php else: ?>
             <?php foreach($instances as $inst): ?>
+            <?php 
+                // Vérification PHP de l'existence du modèle pour CHAQUE instance
+                $modelePath = 'uploads/modeles/modele_instance_' . $inst['id'] . '.odt';
+                $inst['hasModele'] = file_exists($modelePath);
+            ?>
             <div class="col-12 col-md-6 col-xl-4">
                 <div class="card h-100 border-0 shadow-sm d-flex flex-column">
                     <div class="card-body flex-grow-1">
@@ -85,7 +90,7 @@
                     </div>
                     <div class="card-footer bg-transparent border-top-0 pt-0 pb-3 px-3 d-flex gap-2 mt-auto">
                         <button type="button" class="btn btn-sm btn-outline-primary flex-grow-1"
-                                onclick="openModal(<?= htmlspecialchars(json_encode($inst), ENT_QUOTES, 'UTF-8') ?>)">
+                                onclick='openModal(<?= htmlspecialchars(json_encode($inst, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP)) ?>)'>
                             <i class="bi bi-pencil-square me-1"></i>Éditer
                         </button>
                         <button type="button" class="btn btn-sm btn-outline-danger"
@@ -139,29 +144,31 @@
 <div class="modal fade" id="instanceModal" tabindex="-1" data-bs-backdrop="static">
     <div class="modal-dialog modal-dialog-centered modal-xl">
         <div class="modal-content border-0 shadow">
-            <form id="instanceForm" novalidate>
-                <input type="hidden" name="instance_id" id="instance_id">
-                <input type="hidden" name="save_instance" value="1">
-                <input type="hidden" name="membres_json" id="membres_json" value="[]">
+            
+            <div class="modal-header bg-light border-0">
+                <h5 class="modal-title fw-bold" id="modalTitle">Nouvelle Instance</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
 
-                <div class="modal-header bg-light border-0">
-                    <h5 class="modal-title fw-bold" id="modalTitle">Nouvelle Instance</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
+            <!-- ONGLETS -->
+            <div class="bg-light px-4 border-bottom">
+                <ul class="nav nav-tabs border-0" id="instanceTabs">
+                    <li class="nav-item"><button class="nav-link active fw-bold" data-bs-toggle="tab" data-bs-target="#tab-infos" type="button"><i class="bi bi-info-circle me-1"></i>Paramètres</button></li>
+                    <li class="nav-item"><button class="nav-link fw-bold" data-bs-toggle="tab" data-bs-target="#tab-managers" type="button"><i class="bi bi-shield-lock me-1"></i>Gestionnaires</button></li>
+                    <li class="nav-item"><button class="nav-link fw-bold" data-bs-toggle="tab" data-bs-target="#tab-membres" type="button" id="tabMembresTrigger"><i class="bi bi-people me-1"></i>Membres</button></li>
+                    <li class="nav-item" id="tabConvocationsLi" style="display:none;"><button class="nav-link fw-bold" data-bs-toggle="tab" data-bs-target="#tab-convocations" type="button"><i class="bi bi-file-earmark-word me-1"></i>Modèle Convocation</button></li>
+                </ul>
+            </div>
 
-                <!-- ONGLETS -->
-                <div class="bg-light px-4 border-bottom">
-                    <ul class="nav nav-tabs border-0" id="instanceTabs">
-                        <li class="nav-item"><button class="nav-link active fw-bold" data-bs-toggle="tab" data-bs-target="#tab-infos" type="button"><i class="bi bi-info-circle me-1"></i>Paramètres</button></li>
-                        <li class="nav-item"><button class="nav-link fw-bold" data-bs-toggle="tab" data-bs-target="#tab-managers" type="button"><i class="bi bi-shield-lock me-1"></i>Gestionnaires</button></li>
-                        <li class="nav-item"><button class="nav-link fw-bold" data-bs-toggle="tab" data-bs-target="#tab-membres" type="button" id="tabMembresTrigger"><i class="bi bi-people me-1"></i>Membres</button></li>
-                    </ul>
-                </div>
+            <div class="modal-body p-4 tab-content">
 
-                <div class="modal-body p-4 tab-content">
+                <!-- ONGLET 1 : PARAMÈTRES -->
+                <div class="tab-pane fade show active" id="tab-infos">
+                    <form id="instanceForm" novalidate>
+                        <input type="hidden" name="instance_id" id="instance_id">
+                        <input type="hidden" name="save_instance" value="1">
+                        <input type="hidden" name="membres_json" id="membres_json" value="[]">
 
-                    <!-- ONGLET 1 : PARAMÈTRES -->
-                    <div class="tab-pane fade show active" id="tab-infos">
                         <div class="mb-3">
                             <label class="form-label small fw-bold">Nom de l'instance <span class="text-danger">*</span></label>
                             <input type="text" id="nom" class="form-control" placeholder="Ex : Comité Social Territorial">
@@ -188,128 +195,149 @@
                                 <div class="field-error" id="err-quorum">Valeur requise (min. 1).</div>
                             </div>
                         </div>
+                    </form>
+                </div>
+
+                <!-- ONGLET 2 : GESTIONNAIRES -->
+                <div class="tab-pane fade" id="tab-managers">
+                    <div class="alert alert-info border-0 py-2 small mb-4">
+                        <i class="bi bi-info-circle-fill me-1"></i>Ces agents pourront créer des séances et rédiger l'ordre du jour.
+                    </div>
+                    <label class="form-label small fw-bold">Gestionnaires (agents ayant un compte)</label>
+                    <div id="pb-managers"></div>
+                </div>
+
+                <!-- ONGLET 3 : MEMBRES -->
+                <div class="tab-pane fade" id="tab-membres">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h6 class="fw-bold mb-0 text-muted">Composition de l'instance</h6>
+                        <button type="button" class="btn btn-sm btn-primary fw-bold" onclick="openMemberForm()">
+                            <i class="bi bi-person-plus-fill me-1"></i>Ajouter un membre
+                        </button>
                     </div>
 
-                    <!-- ONGLET 2 : GESTIONNAIRES -->
-                    <div class="tab-pane fade" id="tab-managers">
-                        <div class="alert alert-info border-0 py-2 small mb-4">
-                            <i class="bi bi-info-circle-fill me-1"></i>Ces agents pourront créer des séances et rédiger l'ordre du jour.
-                        </div>
-                        <label class="form-label small fw-bold">Gestionnaires (agents ayant un compte)</label>
-                        <div id="pb-managers"></div>
-                    </div>
-
-                    <!-- ONGLET 3 : MEMBRES -->
-                    <div class="tab-pane fade" id="tab-membres">
-                        <div class="d-flex justify-content-between align-items-center mb-3">
-                            <h6 class="fw-bold mb-0 text-muted">Composition de l'instance</h6>
-                            <button type="button" class="btn btn-sm btn-primary fw-bold" onclick="openMemberForm()">
-                                <i class="bi bi-person-plus-fill me-1"></i>Ajouter un membre
-                            </button>
-                        </div>
-
-                        <!-- FORMULAIRE DÉROULANT -->
-                        <div class="collapse mb-4" id="addMemberCardCollapse">
-                            <div class="card bg-light border border-primary border-opacity-25 shadow-sm">
-                                <div class="card-body">
-                                    <h6 class="fw-bold text-primary mb-3" id="m_form_title">Nouveau Membre</h6>
-                                    <input type="hidden" id="m_edit_id" value="">
-                                    <div class="row g-2">
-                                        <div class="col-md-4">
-                                            <input type="text" id="m_nom" class="form-control form-control-sm" placeholder="Nom *">
-                                            <div class="field-error" id="err-m-nom">Le nom est obligatoire.</div>
-                                        </div>
-                                        <div class="col-md-4">
-                                            <input type="text" id="m_prenom" class="form-control form-control-sm" placeholder="Prénom *">
-                                            <div class="field-error" id="err-m-prenom">Le prénom est obligatoire.</div>
-                                        </div>
-                                        <div class="col-md-4">
-                                            <input type="email" id="m_email" class="form-control form-control-sm" placeholder="Email" onkeyup="checkEmailMatch()">
-                                        </div>
-                                        <div class="col-md-4">
-                                            <input type="text" id="m_qualite" class="form-control form-control-sm" placeholder="Qualité (ex : Président)">
-                                        </div>
-                                        <div class="col-md-4">
-                                            <select id="m_college" class="form-select form-select-sm">
-                                                <option value="administration">Collège Administration</option>
-                                                <option value="personnel">Collège Personnel</option>
-                                            </select>
-                                        </div>
-                                        <div class="col-md-4">
-                                            <select id="m_mandat" class="form-select form-select-sm">
-                                                <option value="titulaire">Titulaire</option>
-                                                <option value="suppleant">Suppléant</option>
-                                            </select>
-                                        </div>
+                    <!-- FORMULAIRE DÉROULANT -->
+                    <div class="collapse mb-4" id="addMemberCardCollapse">
+                        <div class="card bg-light border border-primary border-opacity-25 shadow-sm">
+                            <div class="card-body">
+                                <h6 class="fw-bold text-primary mb-3" id="m_form_title">Nouveau Membre</h6>
+                                <input type="hidden" id="m_edit_id" value="">
+                                <div class="row g-2">
+                                    <div class="col-md-4">
+                                        <input type="text" id="m_nom" class="form-control form-control-sm" placeholder="Nom *">
+                                        <div class="field-error" id="err-m-nom">Le nom est obligatoire.</div>
                                     </div>
-
-                                    <!-- ALERTE COMPTE TROUVÉ -->
-                                    <div id="m_account_alert" class="alert alert-success mt-3 py-2 small mb-0 align-items-center justify-content-between" style="display:none !important;">
-                                        <div><i class="bi bi-check-circle-fill me-2"></i>Compte trouvé : <strong id="m_match_name"></strong></div>
-                                        <div class="form-check form-switch ms-3 mb-0">
-                                            <input class="form-check-input" type="checkbox" id="m_link_account" checked>
-                                            <label class="form-check-label" for="m_link_account">Lier ce compte</label>
-                                        </div>
-                                        <input type="hidden" id="m_matched_user_id">
+                                    <div class="col-md-4">
+                                        <input type="text" id="m_prenom" class="form-control form-control-sm" placeholder="Prénom *">
+                                        <div class="field-error" id="err-m-prenom">Le prénom est obligatoire.</div>
                                     </div>
-
-                                    <div class="mt-3 text-end">
-                                        <button type="button" class="btn btn-sm btn-light border me-1" onclick="closeMemberForm()">Annuler</button>
-                                        <button type="button" class="btn btn-sm btn-success" id="btnSubmitMember" onclick="saveMemberToList()">
-                                            <i class="bi bi-check-lg me-1"></i>Ajouter à la liste
-                                        </button>
+                                    <div class="col-md-4">
+                                        <input type="email" id="m_email" class="form-control form-control-sm" placeholder="Email" onkeyup="checkEmailMatch()">
                                     </div>
+                                    <div class="col-md-4">
+                                        <input type="text" id="m_qualite" class="form-control form-control-sm" placeholder="Qualité (ex : Président)">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <select id="m_college" class="form-select form-select-sm">
+                                            <option value="administration">Collège Administration</option>
+                                            <option value="personnel">Collège Personnel</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <select id="m_mandat" class="form-select form-select-sm">
+                                            <option value="titulaire">Titulaire</option>
+                                            <option value="suppleant">Suppléant</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <!-- ALERTE COMPTE TROUVÉ -->
+                                <div id="m_account_alert" class="alert alert-success mt-3 py-2 small mb-0 align-items-center justify-content-between" style="display:none !important;">
+                                    <div><i class="bi bi-check-circle-fill me-2"></i>Compte trouvé : <strong id="m_match_name"></strong></div>
+                                    <div class="form-check form-switch ms-3 mb-0">
+                                        <input class="form-check-input" type="checkbox" id="m_link_account" checked>
+                                        <label class="form-check-label" for="m_link_account">Lier ce compte</label>
+                                    </div>
+                                    <input type="hidden" id="m_matched_user_id">
+                                </div>
+
+                                <div class="mt-3 text-end">
+                                    <button type="button" class="btn btn-sm btn-light border me-1" onclick="closeMemberForm()">Annuler</button>
+                                    <button type="button" class="btn btn-sm btn-success" id="btnSubmitMember" onclick="saveMemberToList()">
+                                        <i class="bi bi-check-lg me-1"></i>Ajouter à la liste
+                                    </button>
                                 </div>
                             </div>
                         </div>
+                    </div>
 
-                        <!-- TABLEAUX MEMBRES -->
-                        <h6 class="text-primary fw-bold"><i class="bi bi-building me-1"></i>Collège Administration</h6>
-                        <div class="table-responsive mb-4">
-                            <table class="table table-sm table-bordered bg-white fixed-table mb-0">
-                                <thead class="table-light text-muted small">
-                                    <tr>
-                                        <th style="width:30%">Nom Prénom</th>
-                                        <th style="width:25%">Qualité</th>
-                                        <th style="width:15%">Mandat</th>
-                                        <th style="width:20%">Email</th>
-                                        <th style="width:80px" class="text-center">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="tbody-administration"></tbody>
-                            </table>
-                        </div>
+                    <!-- TABLEAUX MEMBRES -->
+                    <h6 class="text-primary fw-bold"><i class="bi bi-building me-1"></i>Collège Administration</h6>
+                    <div class="table-responsive mb-4">
+                        <table class="table table-sm table-bordered bg-white fixed-table mb-0">
+                            <thead class="table-light text-muted small">
+                                <tr>
+                                    <th style="width:30%">Nom Prénom</th>
+                                    <th style="width:25%">Qualité</th>
+                                    <th style="width:15%">Mandat</th>
+                                    <th style="width:20%">Email</th>
+                                    <th style="width:80px" class="text-center">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-administration"></tbody>
+                        </table>
+                    </div>
 
-                        <h6 class="text-success fw-bold"><i class="bi bi-people me-1"></i>Collège Représentants du Personnel</h6>
-                        <div class="table-responsive">
-                            <table class="table table-sm table-bordered bg-white fixed-table mb-0">
-                                <thead class="table-light text-muted small">
-                                    <tr>
-                                        <th style="width:30%">Nom Prénom</th>
-                                        <th style="width:25%">Qualité</th>
-                                        <th style="width:15%">Mandat</th>
-                                        <th style="width:20%">Email</th>
-                                        <th style="width:80px" class="text-center">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="tbody-personnel"></tbody>
-                            </table>
-                        </div>
+                    <h6 class="text-success fw-bold"><i class="bi bi-people me-1"></i>Collège Représentants du Personnel</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered bg-white fixed-table mb-0">
+                            <thead class="table-light text-muted small">
+                                <tr>
+                                    <th style="width:30%">Nom Prénom</th>
+                                    <th style="width:25%">Qualité</th>
+                                    <th style="width:15%">Mandat</th>
+                                    <th style="width:20%">Email</th>
+                                    <th style="width:80px" class="text-center">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-personnel"></tbody>
+                        </table>
                     </div>
                 </div>
 
-                <div class="modal-footer border-0 bg-light">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
-                    <button type="button" class="btn btn-primary fw-bold px-4" onclick="submitInstanceForm()">
-                        <i class="bi bi-floppy me-1"></i>Enregistrer tout
-                    </button>
+                <!-- ONGLET 4 : MODÈLE CONVOCATION -->
+                <div class="tab-pane fade" id="tab-convocations">
+                    <h6 class="fw-bold text-dark mb-3"><i class="bi bi-file-earmark-word me-2 text-primary"></i>Modèle de Convocation (Format .odt)</h6>
+                    <div class="alert alert-light border small text-muted mb-3">
+                        Utilisez les balises suivantes dans votre document LibreOffice/Word : 
+                        <strong class="text-dark">{{INSTANCE}}, {{DATE}}, {{HEURE}}, {{LIEU}}, {{ODJ}}</strong>. 
+                        Elles seront remplacées automatiquement lors de la génération de la séance.
+                    </div>
+                    
+                    <!-- Affichage dynamique via JS si le fichier existe -->
+                    <div id="modele-status-badge"></div>
+                    
+                    <form action="<?= URLROOT ?>/admin/instances" method="POST" enctype="multipart/form-data" class="d-flex gap-2 align-items-center mt-4 border-top pt-4">
+                        <input type="hidden" name="upload_modele" value="1">
+                        <input type="hidden" name="instance_id" id="upload_instance_id" value="">
+                        <input type="file" name="modele_odt" class="form-control form-control-sm" accept=".odt" required>
+                        <button type="submit" class="btn btn-sm btn-primary fw-bold px-3"><i class="bi bi-upload me-1"></i>Mettre à jour le modèle</button>
+                    </form>
                 </div>
-            </form>
+            </div>
+
+            <div class="modal-footer border-0 bg-light">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+                <button type="button" class="btn btn-primary fw-bold px-4" id="btn-save-instance" onclick="submitInstanceForm()">
+                    <i class="bi bi-floppy me-1"></i>Enregistrer Instance
+                </button>
+            </div>
+            
         </div>
     </div>
 </div>
 
-<!-- Formulaire de soumission caché (POST classique) -->
+<!-- Formulaire de soumission caché (POST classique pour l'instance) -->
 <form id="realSubmitForm" method="POST" action="<?= URLROOT ?>/admin/instances" style="display:none">
     <input type="hidden" name="save_instance" value="1">
     <input type="hidden" name="instance_id" id="fs_instance_id">
@@ -331,6 +359,18 @@ let memberCollapse = null;
 document.addEventListener("DOMContentLoaded", function() {
     memberCollapse = new bootstrap.Collapse(document.getElementById('addMemberCardCollapse'), {
         toggle: false
+    });
+    
+    // Gérer l'affichage du bouton "Enregistrer" selon l'onglet actif
+    const instanceTabs = document.getElementById('instanceTabs');
+    instanceTabs.addEventListener('shown.bs.tab', function (event) {
+        const target = event.target.getAttribute('data-bs-target');
+        const saveBtn = document.getElementById('btn-save-instance');
+        if (target === '#tab-convocations') {
+            saveBtn.style.display = 'none'; // Pas de sauvegarde générale pour les fichiers
+        } else {
+            saveBtn.style.display = 'block';
+        }
     });
 });
 
@@ -609,7 +649,11 @@ function openModal(inst = null) {
         if (el) el.style.display = 'none';
     });
 
+    const tabConvoc = document.getElementById('tabConvocationsLi');
+    const statusBadge = document.getElementById('modele-status-badge');
+
     if (inst) {
+        // Mode ÉDITION
         document.getElementById('modalTitle').innerText = "Modifier : " + inst.nom;
         document.getElementById('instance_id').value = inst.id;
         document.getElementById('nom').value = inst.nom;
@@ -617,6 +661,7 @@ function openModal(inst = null) {
         document.getElementById('nb_titulaires').value = inst.nb_titulaires;
         document.getElementById('nb_suppleants').value = inst.nb_suppleants;
         document.getElementById('quorum').value = inst.quorum_requis;
+        
         pbManagers.setSelection(inst.managers || []);
         currentMembers = (inst.membres || []).map(m => {
             if (m.user_id) {
@@ -626,7 +671,30 @@ function openModal(inst = null) {
             return { ...m, id: 'db_' + m.id };
         });
         renderMembersTables();
+
+        // Gérer l'onglet Modèle de convocation
+        tabConvoc.style.display = 'block';
+        document.getElementById('upload_instance_id').value = inst.id;
+        
+        // La propriété hasModele est passée par PHP dans la boucle foreach en haut du fichier !
+        if (inst.hasModele) {
+            statusBadge.innerHTML = `
+                <div class="d-flex align-items-center bg-success bg-opacity-10 border border-success border-opacity-25 rounded px-3 py-2">
+                    <i class="bi bi-check-circle-fill text-success me-2"></i>
+                    <span class="small fw-bold text-success me-auto">Modèle en place</span>
+                    <a href="<?= URLROOT ?>/uploads/modeles/modele_instance_${inst.id}.odt?v=<?= time() ?>" class="btn btn-sm text-primary px-2" title="Télécharger" target="_blank"><i class="bi bi-download"></i></a>
+                    <a href="<?= URLROOT ?>/admin/instances?delete_modele_id=${inst.id}" class="btn btn-sm text-danger px-2" title="Supprimer" onclick="return confirm('Supprimer ce modèle ?')"><i class="bi bi-trash"></i></a>
+                </div>`;
+        } else {
+            statusBadge.innerHTML = `
+                <div class="d-flex align-items-center bg-warning bg-opacity-10 border border-warning border-opacity-25 rounded px-3 py-2">
+                    <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>
+                    <span class="small fw-bold text-dark">Aucun modèle configuré</span>
+                </div>`;
+        }
+
     } else {
+        // Mode CRÉATION
         document.getElementById('modalTitle').innerText = "Nouvelle Instance";
         document.getElementById('instance_id').value = '';
         document.getElementById('nom').value = '';
@@ -634,9 +702,14 @@ function openModal(inst = null) {
         document.getElementById('nb_titulaires').value = 5;
         document.getElementById('nb_suppleants').value = 5;
         document.getElementById('quorum').value = 3;
+        
         pbManagers.setSelection([]);
         currentMembers = [];
         renderMembersTables();
+
+        // Cacher l'onglet Modèle de convocation
+        tabConvoc.style.display = 'none';
+        statusBadge.innerHTML = '';
     }
 
     new bootstrap.Modal(document.getElementById('instanceModal')).show();

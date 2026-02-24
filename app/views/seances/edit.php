@@ -33,6 +33,21 @@ $typeCfg = [
     'vote'         => ['label' => 'Vote',          'class' => 'bg-danger'],
     'divers'       => ['label' => 'Divers',        'class' => 'bg-secondary'],
 ];
+
+// --- CYCLE DE VIE & VERROUILLAGES ---
+// 1. Recherche du document de type "convocation"
+$convocationDoc = null;
+foreach($documents as $doc) {
+    if (isset($doc['type_doc']) && $doc['type_doc'] === 'convocation') {
+        $convocationDoc = $doc;
+        break;
+    }
+}
+$hasConvocSignee = ($convocationDoc !== null);
+
+// 2. Variables de permissions dynamiques
+$isOdjEditable = in_array($seance['statut'], ['brouillon', 'date_fixee']); 
+$isDossierEditable = in_array($seance['statut'], ['brouillon', 'date_fixee', 'odj_valide']);
 ?>
 
 <div class="container py-4">
@@ -75,7 +90,14 @@ $typeCfg = [
                             <a href="#" onclick="showConfirmModal('<?= URLROOT ?>/seances/changeStatut/<?= $seance['id'] ?>?statut=brouillon', 'Repasser en brouillon ? La séance ne sera plus visible par les membres.')" class="btn btn-outline-secondary fw-bold shadow-sm">
                                 <i class="bi bi-arrow-counterclockwise me-1"></i> Brouillon
                             </a>
-                            <a href="#" onclick="showConfirmModal('<?= URLROOT ?>/seances/changeStatut/<?= $seance['id'] ?>?statut=odj_valide', 'Valider l\'Ordre du jour ? Les membres pourront voir la liste des points.')" class="btn btn-primary fw-bold shadow-sm">
+                            <?php 
+                            if ($hasConvocSignee) {
+                                $msgPublierOdj = "Valider l\'Ordre du jour ? Un mail va être envoyé aux membres avec l\'ODJ et la convocation sera mise à disposition sur leur espace.";
+                            } else {
+                                $msgPublierOdj = "ATTENTION : Aucune convocation n\'a été ajoutée ! Êtes-vous sûr de vouloir publier l\'Ordre du jour sans la convocation ?";
+                            }
+                            ?>
+                            <a href="#" onclick="showConfirmModal('<?= URLROOT ?>/seances/changeStatut/<?= $seance['id'] ?>?statut=odj_valide', '<?= $msgPublierOdj ?>')" class="btn btn-primary fw-bold shadow-sm">
                                 Étape 2 : Publier l'ODJ <i class="bi bi-arrow-right ms-1"></i>
                             </a>
                             
@@ -185,7 +207,7 @@ $typeCfg = [
     <!-- ORDRE DU JOUR (ÉDITION) -->
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h4 class="fw-bold mb-0"><i class="bi bi-list-ol me-2 text-primary"></i>Édition de l'Ordre du Jour</h4>
-        <?php if ($seance['statut'] !== 'terminee'): ?>
+        <?php if ($isOdjEditable): ?>
             <button type="button" class="btn btn-primary shadow-sm" data-bs-toggle="modal" data-bs-target="#addPointModal">
                 <i class="bi bi-plus-lg me-1"></i>Nouveau point
             </button>
@@ -203,17 +225,24 @@ $typeCfg = [
             <?php else: ?>
                 <div class="accordion shadow-sm" id="accordionODJEdit">
                     <?php foreach ($points as $i => $pt): 
-                        $docsPoint = array_filter($documents, fn($d) => $d['point_odj_id'] == $pt['id']);
+                        // Exclure la convocation pour ne compter que les vraies PJ du point
+                        $docsPoint = array_filter($documents, fn($d) => $d['point_odj_id'] == $pt['id'] && (!isset($d['type_doc']) || $d['type_doc'] !== 'convocation'));
                         $tcfg = $typeCfg[$pt['type_point']] ?? ['label' => $pt['type_point'], 'class' => 'bg-secondary'];
                     ?>
                     
                     <!-- data-id est utilisé par SortableJS -->
                     <div class="accordion-item border-0 border-bottom bg-white" data-id="<?= $pt['id'] ?>">
                         <div class="accordion-header d-flex align-items-center pe-3">
-                            <!-- Poignée Drag & Drop -->
-                            <div class="px-3 py-3 text-muted drag-handle" style="cursor: grab;" title="Glisser pour réorganiser">
-                                <i class="bi bi-grip-vertical fs-5"></i>
-                            </div>
+                            <!-- Poignée Drag & Drop (Toujours active sauf séance terminée) -->
+                            <?php if ($seance['statut'] !== 'terminee'): ?>
+                                <div class="px-3 py-3 text-muted drag-handle" style="cursor: grab;" title="Glisser pour réorganiser">
+                                    <i class="bi bi-grip-vertical fs-5"></i>
+                                </div>
+                            <?php else: ?>
+                                <div class="px-3 py-3 text-muted">
+                                    <i class="bi bi-dot fs-5"></i>
+                                </div>
+                            <?php endif; ?>
                             
                             <!-- Bouton Accordéon -->
                             <button class="accordion-button collapsed flex-grow-1 border-0 shadow-none bg-transparent px-2" type="button" data-bs-toggle="collapse" data-bs-target="#col_edit_<?= $pt['id'] ?>" style="width: auto;">
@@ -225,7 +254,7 @@ $typeCfg = [
                             </button>
                             
                             <!-- Bouton Supprimer FIXE ET TOUJOURS VISIBLE -->
-                            <?php if ($seance['statut'] !== 'terminee'): ?>
+                            <?php if ($isOdjEditable): ?>
                             <a href="#" onclick="showConfirmModal('<?= URLROOT ?>/seances/deletePoint/<?= $pt['id'] ?>', 'Supprimer ce point et ses documents associés ?')" class="btn btn-sm btn-outline-danger border-0 ms-2" title="Supprimer le point">
                                 <i class="bi bi-trash fs-6"></i>
                             </a>
@@ -239,27 +268,35 @@ $typeCfg = [
                                 <div class="mb-4 bg-white p-3 rounded shadow-sm border">
                                     <h6 class="fw-bold text-secondary mb-2" style="font-size: 0.85rem; text-transform: uppercase;">Exposé des motifs</h6>
                                     
-                                    <!-- Conteneur pour l'éditeur Quill -->
-                                    <div id="editor-<?= $pt['id'] ?>" style="height: 150px; background: #fff;">
-                                        <?= $pt['description'] ?> <!-- On affiche le HTML tel quel -->
-                                    </div>
-                                    
-                                    <div class="d-flex justify-content-end align-items-center mt-2">
-                                        <span id="save-msg-<?= $pt['id'] ?>" class="text-success small fw-bold me-3 d-none">
-                                            <i class="bi bi-check-lg me-1"></i>Sauvegardé
-                                        </span>
-                                        <button class="btn btn-sm btn-primary fw-bold" onclick="saveDescription(<?= $pt['id'] ?>)">
-                                            <i class="bi bi-save me-1"></i>Enregistrer le texte
-                                        </button>
-                                    </div>
+                                    <?php if ($isDossierEditable): ?>
+                                        <!-- Conteneur pour l'éditeur Quill -->
+                                        <div id="editor-<?= $pt['id'] ?>" style="height: 150px; background: #fff;">
+                                            <?= $pt['description'] ?> <!-- On affiche le HTML tel quel -->
+                                        </div>
+                                        
+                                        <div class="d-flex justify-content-end align-items-center mt-2">
+                                            <span id="save-msg-<?= $pt['id'] ?>" class="text-success small fw-bold me-3 d-none">
+                                                <i class="bi bi-check-lg me-1"></i>Sauvegardé
+                                            </span>
+                                            <button class="btn btn-sm btn-primary fw-bold" onclick="saveDescription(<?= $pt['id'] ?>)">
+                                                <i class="bi bi-save me-1"></i>Enregistrer le texte
+                                            </button>
+                                        </div>
+                                    <?php else: ?>
+                                        <div class="rich-text-container">
+                                            <?= !empty(trim(strip_tags($pt['description']))) ? $pt['description'] : '<em class="text-muted">Aucun exposé des motifs fourni.</em>' ?>
+                                        </div>
+                                    <?php endif; ?>
                                 </div>
                                 
                                 <!-- PIÈCES JOINTES -->
                                 <div class="d-flex justify-content-between align-items-center mb-2 mt-4">
                                     <h6 class="fw-bold mb-0 text-secondary" style="font-size: 0.85rem; text-transform: uppercase;">Pièces jointes</h6>
+                                    <?php if ($isDossierEditable): ?>
                                     <button class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size:0.75rem;" onclick="openDocModal(<?= $pt['id'] ?>)">
                                         <i class="bi bi-upload me-1"></i>Ajouter un document
                                     </button>
+                                    <?php endif; ?>
                                 </div>
                                 
                                 <?php if (!empty($docsPoint)): ?>
@@ -277,9 +314,11 @@ $typeCfg = [
                                                         <div class="text-muted" style="font-size:0.65rem;">Ajouté le <?= date('d/m/Y', strtotime($doc['uploaded_at'] ?? 'now')) ?></div>
                                                     </div>
                                                 </a>
+                                                <?php if ($isDossierEditable): ?>
                                                 <a href="#" onclick="showConfirmModal('<?= URLROOT ?>/seances/deleteDoc/<?= $doc['id'] ?>', 'Retirer ce document ?')" class="btn btn-sm btn-light text-danger border rounded-circle d-flex align-items-center justify-content-center" style="width: 30px; height: 30px;">
                                                     <i class="bi bi-x-lg"></i>
                                                 </a>
+                                                <?php endif; ?>
                                             </div>
                                         <?php endforeach; ?>
                                     </div>
@@ -297,13 +336,74 @@ $typeCfg = [
         </div>
 
         <div class="col-lg-4">
+            
+            <!-- ENCART CONVOCATION OFFICIELLE -->
+            <div class="card border-0 shadow-sm mb-4 border-top border-4 border-warning">
+                <div class="card-header bg-white border-0 pt-3 px-3 pb-0">
+                    <h6 class="fw-bold mb-0 text-dark text-uppercase"><i class="bi bi-file-earmark-check text-warning me-2"></i>Convocation</h6>
+                </div>
+                <div class="card-body px-3 pb-3">
+                    
+                    <?php if ($isOdjEditable): ?>
+                        <?php if (!$hasConvocSignee): ?>
+                            <!-- ÉTAPE 1 : Génération de l'ODT -->
+                            <div class="mb-3 border-bottom pb-3 mt-2">
+                                <p class="small text-muted mb-2">Générez la base de votre convocation pour mise au parapheur.</p>
+                                <a href="<?= URLROOT ?>/seances/generateConvocation/<?= $seance['id'] ?>" class="btn btn-sm btn-outline-primary w-100">
+                                    <i class="bi bi-file-earmark-word me-1"></i> Générer via le modèle
+                                </a>
+                            </div>
+                            
+                            <!-- ÉTAPE 2 : Upload du PDF en utilisant nativement uploadDoc -->
+                            <div>
+                                <p class="small text-muted mb-2">Une fois signée, téléversez la version finale au format PDF.</p>
+                                <form action="<?= URLROOT ?>/seances/uploadDoc/<?= $seance['id'] ?>" method="POST" enctype="multipart/form-data" class="d-flex gap-2">
+                                    <input type="hidden" name="type_doc" value="convocation">
+                                    <input type="hidden" name="nom" value="Convocation officielle signée">
+                                    <input type="file" name="fichier" class="form-control form-control-sm bg-light" accept=".pdf" required>
+                                    <button type="submit" class="btn btn-sm btn-primary fw-bold"><i class="bi bi-upload"></i></button>
+                                </form>
+                            </div>
+                        <?php else: ?>
+                            <!-- CONVOCATION UPLOADÉE MAIS ENCORE ÉDITABLE (avant ODJ validé) -->
+                            <div class="alert alert-success bg-success bg-opacity-10 border-0 d-flex align-items-center mt-3 mb-0">
+                                <i class="bi bi-check-circle-fill text-success fs-3 me-3"></i>
+                                <div>
+                                    <div class="fw-bold text-dark small">Convocation prête</div>
+                                    <a href="<?= URLROOT ?>/<?= $convocationDoc['chemin_fichier'] ?>" target="_blank" class="small text-decoration-none text-success fw-bold">Voir le PDF</a>
+                                </div>
+                                <a href="#" onclick="showConfirmModal('<?= URLROOT ?>/seances/deleteDoc/<?= $convocationDoc['id'] ?>', 'Retirer cette convocation ?')" class="btn btn-sm text-danger ms-auto px-1" title="Supprimer">
+                                    <i class="bi bi-trash"></i>
+                                </a>
+                            </div>
+                        <?php endif; ?>
+                    <?php else: ?>
+                        <!-- ZONE FIGÉE (Dès ODJ Validé) -->
+                        <?php if ($hasConvocSignee): ?>
+                            <div class="alert alert-secondary bg-light border border-secondary border-opacity-25 d-flex align-items-center mt-2 mb-0">
+                                <i class="bi bi-lock-fill text-muted fs-4 me-3"></i>
+                                <div>
+                                    <div class="fw-bold text-dark small">Zone figée</div>
+                                    <a href="<?= URLROOT ?>/<?= $convocationDoc['chemin_fichier'] ?>" target="_blank" class="small text-decoration-none text-primary fw-bold">Consulter le PDF publié</a>
+                                </div>
+                            </div>
+                        <?php else: ?>
+                            <div class="alert alert-warning border-0 small mb-0 mt-2">
+                                <i class="bi bi-exclamation-triangle me-1"></i> Aucune convocation n'a été déposée avant la publication.
+                            </div>
+                        <?php endif; ?>
+                    <?php endif; ?>
+                    
+                </div>
+            </div>
+
             <!-- RAPPEL DES MEMBRES -->
             <div class="card border-0 shadow-sm mb-4">
                 <div class="card-header bg-white border-0 pt-3 px-3 pb-2 d-flex justify-content-between align-items-center">
                     <h6 class="fw-bold mb-0 text-muted text-uppercase">Convoqués</h6>
                     <span class="badge bg-light text-dark border"><?= count($membres) ?> membres</span>
                 </div>
-                <div class="card-body px-3 pb-3 pt-0" style="max-height: 500px; overflow-y: auto;">
+                <div class="card-body px-3 pb-3 pt-0" style="max-height: 250px; overflow-y: auto;">
                     <?php if (empty($membres)): ?>
                         <p class="text-muted small text-center py-3">Aucun membre rattaché.</p>
                     <?php else: ?>
@@ -346,6 +446,7 @@ $typeCfg = [
         <div class="modal-content border-0 shadow">
             <form action="<?= URLROOT ?>/seances/uploadDoc/<?= $seance['id'] ?>" method="POST" enctype="multipart/form-data">
                 <input type="hidden" name="point_odj_id" id="upload_point_id" value="">
+                <input type="hidden" name="type_doc" value="annexe">
                 <div class="modal-header bg-light border-0">
                     <h5 class="modal-title fw-bold"><i class="bi bi-cloud-arrow-up text-primary me-2"></i>Ajouter un document</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -369,7 +470,7 @@ $typeCfg = [
     </div>
 </div>
 
-<!-- MODALE DE CRÉATION DE POINT (Allégée : plus de description ici) -->
+<!-- MODALE DE CRÉATION DE POINT -->
 <div class="modal fade" id="addPointModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content border-0 shadow">
@@ -390,7 +491,7 @@ $typeCfg = [
                                 <option value="information">Information simple</option>
                                 <option value="deliberation">Délibération</option>
                                 <option value="vote">Soumis au vote</option>
-                                <option value="divers">Questions diverses</option>
+                                <option value="divers">Questions diverse</option>
                             </select>
                         </div>
                         <div class="col-md-6">
@@ -409,7 +510,7 @@ $typeCfg = [
     </div>
 </div>
 
-<!-- MODALE GÉNÉRIQUE DE CONFIRMATION (Remplace les popups Chrome) -->
+<!-- MODALE GÉNÉRIQUE DE CONFIRMATION -->
 <div class="modal fade" id="confirmModal" tabindex="-1">
     <div class="modal-dialog modal-sm modal-dialog-centered">
         <div class="modal-content border-0 shadow">
@@ -433,6 +534,16 @@ $typeCfg = [
 .card-body::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
 .drag-handle:active { cursor: grabbing !important; }
 .sortable-ghost { opacity: 0.4; background-color: #f8f9fa; border: 2px dashed #0d6efd !important; }
+
+/* Styles repris de la vue consultation pour l'affichage de texte enrichi quand figé */
+.rich-text-container {
+    font-size: 0.875em;
+    color: #6c757d;
+    margin-bottom: 1rem;
+}
+.rich-text-container p, .rich-text-container ul, .rich-text-container ol { margin-bottom: 0.5rem; }
+.rich-text-container p:last-child, .rich-text-container ul:last-child { margin-bottom: 0; }
+.rich-text-container a { color: #0d6efd; }
 </style>
 
 <!-- Librairies externes JS -->

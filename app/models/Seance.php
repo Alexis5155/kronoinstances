@@ -69,8 +69,21 @@ class Seance {
     }
 
     public function delete($id) {
-        // Les points ODJ seront supprimés en cascade si la contrainte FK est définie
         $stmt = $this->db->prepare("DELETE FROM seances WHERE id = ?");
         return $stmt->execute([$id]);
     }
+
+    public function getMembresAvecEmail($instanceId) {
+        $db = \app\core\Database::getConnection();
+        $stmt = $db->prepare("
+            SELECT id, nom, prenom, email, college, type_mandat
+            FROM membres
+            WHERE instance_id = ?
+            AND type_mandat = 'titulaire'
+            AND email IS NOT NULL AND email != ''
+        ");
+        $stmt->execute([$instanceId]);
+        return $stmt->fetchAll();
+    }
+
 }

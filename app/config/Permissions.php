@@ -2,88 +2,59 @@
 namespace app\config;
 
 class Permissions {
-    // Liste exhaustive des permissions codées en dur
     public const LIST = [
         // --- GESTION MÉTIER ---
-        'create_acte' => [
-            'nom' => 'Créer des actes',
-            'desc' => 'Permet de générer un nouveau numéro',
+        'manage_instances' => [
+            'nom' => 'Gérer les instances',
+            'desc' => 'Créer, modifier, supprimer des instances (inclut le suivi des présences)',
             'cat' => 'Gestion métier'
         ],
-        'edit_acte_title' => [
-            'nom' => 'Modifier titre',
-            'desc' => 'Correction mineure du titre uniquement',
+        'manage_membres' => [
+            'nom' => 'Gérer les membres',
+            'desc' => 'Ajouter, modifier ou supprimer des membres d\'une instance',
             'cat' => 'Gestion métier'
         ],
-        
-        // --- SUPERVISION DU SERVICE ---
-        'view_service_actes' => [
-            'nom' => 'Voir les actes du service',
-            'desc' => 'Consulter les actes de son service',
-            'cat' => 'Supervision du service'
+        'create_seances' => [
+            'nom' => 'Créer des séances',
+            'desc' => 'Créer de nouvelles séances et préparer l\'Ordre du Jour',
+            'cat' => 'Gestion métier'
         ],
-        'edit_service_actes' => [
-            'nom' => 'Éditer les actes du service',
-            'desc' => 'Modifier les actes de son service',
-            'cat' => 'Supervision du service'
+        'manage_convocations' => [
+            'nom' => 'Gérer les convocations',
+            'desc' => 'Générer les ODT et gérer l\'envoi des convocations',
+            'cat' => 'Gestion métier'
         ],
 
-        // --- REGISTRE GLOBAL ---
-        'view_all_actes' => [
-            'nom' => 'Voir registre global',
-            'desc' => 'Accès en lecture à tout le registre',
-            'cat' => 'Registre Global'
+        // --- WORKFLOW DES SÉANCES ---
+        'avancer_etapes' => [
+            'nom' => 'Avancer le statut',
+            'desc' => 'Faire progresser une séance vers l\'étape suivante',
+            'cat' => 'Workflow'
         ],
-        'edit_all_actes' => [
-            'nom' => 'Éditer registre global',
-            'desc' => 'Modifier n\'importe quel acte',
-            'cat' => 'Registre Global'
-        ],
-        'delete_acte' => [
-            'nom' => 'Supprimer acte',
-            'desc' => 'Suppression définitive (Archives + BDD)',
-            'cat' => 'Registre Global'
-        ],
-        'export_registre' => [
-            'nom' => 'Exporter',
-            'desc' => 'Accès aux exports CSV/Excel',
-            'cat' => 'Registre Global'
+        'retrograder_etapes' => [
+            'nom' => 'Rétrograder le statut',
+            'desc' => 'Faire revenir une séance à une étape précédente',
+            'cat' => 'Workflow'
         ],
 
         // --- ADMINISTRATION ---
         'view_logs' => [
             'nom' => 'Voir les logs',
-            'desc' => 'Audit des actions techniques',
+            'desc' => 'Consulter le journal d\'audit technique',
             'cat' => 'Administration'
         ],
         'manage_users' => [
-            'nom' => 'Gérer utilisateurs',
-            'desc' => 'Créer, modifier, supprimer des comptes',
-            'cat' => 'Administration'
-        ],
-        'manage_roles' => [
-            'nom' => 'Gérer rôles',
-            'desc' => 'Créer des rôles et changer les permissions',
-            'cat' => 'Administration'
-        ],
-        'manage_services' => [
-            'nom' => 'Gérer services',
-            'desc' => 'Ajouter/Supprimer des services',
-            'cat' => 'Administration'
-        ],
-        'manage_signataires' => [
-            'nom' => 'Gérer signataires',
-            'desc' => 'Ajouter/Supprimer des signataires',
+            'nom' => 'Gérer les utilisateurs',
+            'desc' => 'Créer, modifier, supprimer des comptes et leurs permissions',
             'cat' => 'Administration'
         ],
         'manage_system' => [
-            'nom' => 'Admin Système',
-            'desc' => 'Mises à jour, config technique, backups',
+            'nom' => 'Administration Système',
+            'desc' => 'Accès super-admin (Configuration globale, mises à jour, BDD)',
             'cat' => 'Administration'
         ]
     ];
 
-    // Helper pour récupérer toutes les permissions
     public static function getAll() {
         return self::LIST;
     }
