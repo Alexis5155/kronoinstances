@@ -103,4 +103,21 @@ class Instance {
             return false;
         }
     }
+
+    public function getOrphanMembresByEmail($email) {
+        $stmt = $this->db->prepare("
+            SELECT m.id, m.nom, m.prenom, m.email, i.nom as instance_nom 
+            FROM membres m
+            JOIN instances i ON m.instance_id = i.id
+            WHERE m.email = ? AND (m.user_id IS NULL OR m.user_id = 0)
+        ");
+        $stmt->execute([trim($email)]);
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC);
+    }
+
+    public function linkUserToMembre($membreId, $userId) {
+        $stmt = $this->db->prepare("UPDATE membres SET user_id = ? WHERE id = ?");
+        return $stmt->execute([$userId, $membreId]);
+    }
+
 }

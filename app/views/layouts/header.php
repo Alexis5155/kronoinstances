@@ -3,18 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KronoActes</title>
+    <title>KronoInstances</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <style>
         body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; }
         
         /* NAVBAR STICKY */
-        .navbar { 
-            border-bottom: 1px solid rgba(255,255,255,0.05); 
-            z-index: 1030; 
-        }
-        
+        .navbar { border-bottom: 1px solid rgba(255,255,255,0.05); z-index: 1030; }
         .nav-link { font-size: 0.9rem; font-weight: 500; transition: all 0.2s; }
         .navbar-dark .navbar-nav .nav-link:hover, .nav-link.active-link { color: #0dcaf0 !important; }
         
@@ -48,60 +44,36 @@
             border: 2px solid #212529;
         }
 
-        /* Correctif A : Isolation des styles du header (h- prefix) */
+        /* NOTIF ITEM */
         .h-notif-item { 
             border-bottom: 1px solid #f1f3f5 !important; 
-            white-space: normal !important; 
-            transition: 0.2s !important; 
-            padding: 0.75rem 1rem !important; 
-            display: block !important;
-            color: #212529 !important;
-            text-decoration: none !important;
+            white-space: normal !important; transition: 0.2s !important; 
+            padding: 0.75rem 1rem !important; display: block !important;
+            color: #212529 !important; text-decoration: none !important;
         }
         .h-notif-item:hover { background-color: #f8f9fa !important; }
         .h-notif-unread { background-color: rgba(13, 202, 240, 0.05) !important; border-left: 3px solid #0dcaf0 !important; }
         .notif-time { font-size: 0.7rem; color: #adb5bd; }
 
         @media (min-width: 992px) {
-            .dropdown-notifications {
-                position: absolute !important;
-                right: 0 !important; /* S'affiche bien sous la cloche */
-                left: auto !important;
-            }
+            .dropdown-notifications { position: absolute !important; right: 0 !important; left: auto !important; }
         }
 
         @media (max-width: 991.98px) {
             .position-static-mobile { position: static !important; }
-        }
-
-        @media (max-width: 991.98px) {
-            /* Centrer l'ensemble du bloc droit */
             .header-right-zone {
-                justify-content: center !important; 
-                width: 100% !important;
-                margin-top: 1rem;
-                padding-top: 1rem;
-                border-top: 1px solid rgba(255,255,255,0.1);
+                justify-content: center !important; width: 100% !important;
+                margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1);
             }
-
-            /* La bulle de notification (Point D : Largeur + padding latéral) */
             .dropdown-notifications {
-                position: absolute !important;
-                left: 10px !important;  /* Padding gauche de la bulle */
-                right: 10px !important; /* Padding droite de la bulle */
-                width: calc(100% - 20px) !important; /* Largeur automatique moins le padding */
-                max-width: none !important;
-                background: white !important;
-                margin-top: 15px !important;
-                border-radius: 12px !important;
-                box-shadow: 0 15px 35px rgba(0,0,0,0.2) !important;
+                position: absolute !important; left: 10px !important; right: 10px !important;
+                width: calc(100% - 20px) !important; max-width: none !important; background: white !important;
+                margin-top: 15px !important; border-radius: 12px !important; box-shadow: 0 15px 35px rgba(0,0,0,0.2) !important;
             }
         }
 
-        /* SÉPARATEURS */
+        /* SÉPARATEURS & BOUTONS */
         .header-divider { width: 1px; height: 24px; background-color: rgba(255,255,255,0.15); align-self: center; }
-
-        /* BOUTON LOGOUT */
         .btn-logout {
             width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
             border-radius: 50% !important; transition: all 0.2s; border: none; background: transparent;
@@ -124,22 +96,23 @@ $recentNotifs = [];
 if (isset($_SESSION['user_id'])) {
     $notifModel = new Notification();
     $unreadCount = $notifModel->count($_SESSION['user_id'], 'unread');
-    // Correctif B : Uniquement les non lues (true en 3e paramètre)
     $recentNotifs = $notifModel->getForUser($_SESSION['user_id'], 5, true);
 }
 
 // --- LOGIQUE DE PAGE ACTIVE ---
-$current_url = $_GET['url'] ?? ''; 
-$is_dash   = (strpos($current_url, 'dashboard') !== false);
-$is_liste  = (strpos($current_url, 'liste') !== false || strpos($current_url, 'modifier') !== false);
-$is_admin  = (strpos($current_url, 'admin') !== false);
-$is_notif  = (strpos($current_url, 'notifications') !== false);
-$is_compte = (strpos($current_url, 'compte') !== false);
+$current_url  = $_GET['url'] ?? ''; 
+$is_dash      = (strpos($current_url, 'dashboard') !== false);
+$is_seances   = (strpos($current_url, 'seances') !== false);
+$is_instances = (strpos($current_url, 'admin/instances') !== false); // Les instances sont une partie Admin Métier
+$is_admin     = (strpos($current_url, 'admin') !== false && !$is_instances); // Menu "Administration logicielle"
+$is_notif     = (strpos($current_url, 'notifications') !== false);
+$is_compte    = (strpos($current_url, 'compte') !== false);
 
+// Détection de droits pour afficher le menu Admin global
 $hasAdminAccess = (
-    User::can('view_all_actes') || User::can('export_registre') || User::can('view_logs') || 
-    User::can('manage_users') || User::can('manage_roles') || User::can('manage_services') || 
-    User::can('manage_signataires') || User::can('manage_system')
+    User::can('view_logs') || 
+    User::can('manage_users') || 
+    User::can('manage_system')
 );
 ?>
 
@@ -147,9 +120,9 @@ $hasAdminAccess = (
     <div class="container">
         <a class="navbar-brand fw-bold d-flex align-items-center" href="<?= URLROOT ?>/dashboard">
             <div class="bg-info bg-opacity-10 rounded p-1 me-2 d-flex align-items-center justify-content-center" style="width: 32px; height: 32px;">
-                <i class="bi bi-clock-history text-info" style="font-size: 1.2rem;"></i>
+                <i class="bi bi-calendar2-range text-info" style="font-size: 1.2rem;"></i>
             </div>
-            <span class="letter-spacing-1">KronoActes</span>
+            <span class="letter-spacing-1">KronoInstances</span>
         </a>
 
         <button class="navbar-toggler border-0 shadow-none" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
@@ -163,47 +136,51 @@ $hasAdminAccess = (
                         <i class="bi bi-grid-1x2 me-2"></i> Tableau de bord
                     </a>
                 </li>
+                
                 <li class="nav-item">
-                    <a class="nav-link d-flex align-items-center <?= $is_liste ? 'active-link' : '' ?>" href="<?= URLROOT ?>/liste">
-                        <i class="bi bi-archive me-2"></i> Mes arrêtés
+                    <a class="nav-link d-flex align-items-center <?= $is_seances ? 'active-link' : '' ?>" href="<?= URLROOT ?>/seances">
+                        <i class="bi bi-card-list me-2"></i> Séances
                     </a>
                 </li>
 
+                <?php if (User::can('manage_instances')): ?>
+                <li class="nav-item">
+                    <a class="nav-link d-flex align-items-center <?= $is_instances ? 'active-link' : '' ?>" href="<?= URLROOT ?>/admin/instances">
+                        <i class="bi bi-diagram-3 me-2"></i> Instances
+                    </a>
+                </li>
+                <?php endif; ?>
+
                 <?php if (isset($_SESSION['user_id']) && $hasAdminAccess): ?>
                 <li class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle d-flex align-items-center <?= $is_admin ? 'active-link' : '' ?> <?= $is_admin ? 'text-info fw-bold' : '' ?>" href="#" id="adminDrop" role="button" data-bs-toggle="dropdown">
+                    <a class="nav-link dropdown-toggle d-flex align-items-center <?= $is_admin ? 'active-link text-info fw-bold' : '' ?>" href="#" id="adminDrop" role="button" data-bs-toggle="dropdown">
                         <i class="bi bi-shield-lock-fill me-2"></i> Administration
                     </a>
                     <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-admin mt-lg-2">
                         <li><a class="dropdown-item fw-bold text-info bg-info bg-opacity-10 mb-2" href="<?= URLROOT ?>/admin"><i class="bi bi-speedometer me-2"></i> Vue d'ensemble</a></li>
                         
-                        <li><h6 class="dropdown-header mt-2">Pilotage & Audit</h6></li>
-                        <li><a class="dropdown-item" href="<?= URLROOT ?>/liste?view=all"><i class="bi bi-journal-text me-2 opacity-50"></i>Registre Global</a></li>
-                        <li><a class="dropdown-item" href="<?= URLROOT ?>/admin/export"><i class="bi bi-download me-2 opacity-50"></i>Exports</a></li>
-                        <li><a class="dropdown-item" href="<?= URLROOT ?>/admin/logs"><i class="bi bi-fingerprint me-2 opacity-50"></i>Journal d'Audit</a></li>
+                        <?php if (User::can('view_logs')): ?>
+                            <li><h6 class="dropdown-header mt-2">Traçabilité</h6></li>
+                            <li><a class="dropdown-item" href="<?= URLROOT ?>/admin/logs"><i class="bi bi-fingerprint me-2 opacity-50"></i>Journal d'Audit</a></li>
+                        <?php endif; ?>
                         
-                        <li><hr class="dropdown-divider opacity-10 my-2"></li>
-                        <li><h6 class="dropdown-header">Utilisateurs</h6></li>
-                        <li><a class="dropdown-item" href="<?= URLROOT ?>/admin/users"><i class="bi bi-people me-2 opacity-50"></i>Gestion Agents</a></li>
-                        <li><a class="dropdown-item" href="<?= URLROOT ?>/admin/roles"><i class="bi bi-ui-checks me-2 opacity-50"></i>Rôles & Droits</a></li>
+                        <?php if (User::can('manage_users')): ?>
+                            <li><hr class="dropdown-divider opacity-10 my-2"></li>
+                            <li><h6 class="dropdown-header">Utilisateurs</h6></li>
+                            <li><a class="dropdown-item" href="<?= URLROOT ?>/admin/users"><i class="bi bi-people me-2 opacity-50"></i>Comptes & Permissions</a></li>
+                        <?php endif; ?>
                         
-                        <li><hr class="dropdown-divider opacity-10 my-2"></li>
-                        <li><h6 class="dropdown-header">Configuration</h6></li>
-                        <li><a class="dropdown-item" href="<?= URLROOT ?>/admin/parametres"><i class="bi bi-sliders2 me-2 opacity-50"></i>Paramètres système</a></li>
+                        <?php if (User::can('manage_system')): ?>
+                            <li><hr class="dropdown-divider opacity-10 my-2"></li>
+                            <li><h6 class="dropdown-header">Configuration</h6></li>
+                            <li><a class="dropdown-item" href="<?= URLROOT ?>/admin/parametres"><i class="bi bi-sliders2 me-2 opacity-50"></i>Paramètres système</a></li>
+                        <?php endif; ?>
                     </ul>
                 </li>
                 <?php endif; ?>
             </ul>
             
             <div class="d-flex align-items-center gap-3 header-right-zone">
-                
-                <?php 
-                    // LOGIQUE (Points B & C)
-                    $notifModel = new \app\models\Notification();
-                    $unreadCount = $notifModel->count($_SESSION['user_id'], 'unread');
-                    $recentNotifs = $notifModel->getForUser($_SESSION['user_id'], 5, true); // Point B : Uniquement non lues
-                ?>
-
                 <div class="dropdown position-static-mobile"> 
                     <div class="bell-container dropdown-toggle <?= $is_notif ? 'text-info' : 'text-white-50' ?>" 
                          data-bs-toggle="dropdown" data-bs-display="static">
@@ -228,7 +205,7 @@ $hasAdminAccess = (
                                 <a href="<?= URLROOT ?>/notifications/read/<?= $notif['id'] ?>" 
                                    class="h-notif-item <?= !$notif['is_read'] ? 'h-notif-unread' : '' ?>">
                                     <div class="d-flex align-items-start">
-                                        <i class="bi bi-info-circle-fill text-<?= $notif['type'] ?> me-2 mt-1"></i>
+                                        <i class="bi bi-info-circle-fill text-<?= htmlspecialchars($notif['type'] ?? 'info') ?> me-2 mt-1"></i>
                                         <div>
                                             <div class="small fw-bold mb-0 text-dark"><?= htmlspecialchars($notif['message']) ?></div>
                                             <div class="notif-time opacity-75"><?= date('d/m H:i', strtotime($notif['created_at'])) ?></div>
@@ -260,3 +237,15 @@ $hasAdminAccess = (
         </div>
     </div>
 </nav>
+
+<!-- Gestion des flash messages globaux (s'ils existent) -->
+<?php
+if (!empty($_SESSION['flash_success'])) {
+    echo '<div class="container no-print mb-3"><div class="alert alert-success border-0 shadow-sm"><i class="bi bi-check-circle-fill me-2"></i>' . htmlspecialchars($_SESSION['flash_success']) . '</div></div>';
+    unset($_SESSION['flash_success']);
+}
+if (!empty($_SESSION['flash_error'])) {
+    echo '<div class="container no-print mb-3"><div class="alert alert-danger border-0 shadow-sm"><i class="bi bi-exclamation-triangle-fill me-2"></i>' . htmlspecialchars($_SESSION['flash_error']) . '</div></div>';
+    unset($_SESSION['flash_error']);
+}
+?>

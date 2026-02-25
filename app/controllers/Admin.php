@@ -4,38 +4,64 @@ namespace app\controllers;
 use app\core\Controller;
 use app\models\User;
 use app\models\Instance;
-use app\models\Parametre;
 use app\models\Log;
-// On supprime Arrete, Signataire, Service, Role (si non utilisé)
+use app\config\Permissions;
 
-class Admin extends Controller {
-
-    public function __construct() {
-        // Redirection si non connecté
+class Admin extends Controller
+{
+    public function __construct()
+    {
+        // 1) Auth obligatoire
         if (!isset($_SESSION['user_id'])) {
-            $currentPath = $_GET['url'] ?? ''; 
+            $currentPath = $_GET['url'] ?? '';
             $this->redirect('login?return=' . urlencode($currentPath));
             exit;
         }
-        
-        // Sécurité globale : Seul l'admin (Role ID 1) accède à ce contrôleur
-        // Ou via permissions si vous préférez
-        if (!User::can('manage_system') && !User::hasPower(100)) {
-             $this->redirect('dashboard');
-             exit;
+
+        // 2) Accès admin si au moins une permission "admin"
+        $this->requireAnyPerm(['manage_system', 'manage_users', 'manage_instances', 'view_logs']);
+
+        // 3) CSRF token simple (à injecter dans les formulaires POST)
+        if (empty($_SESSION['csrf'])) {
+            $_SESSION['csrf'] = bin2hex(random_bytes(32));
         }
     }
 
-    public function index() {
+    private function requirePerm(string $perm): void
+    {
+        if (!User::can($perm)) {
+            $this->redirect('dashboard');
+            exit;
+        }
+    }
+
+    private function requireAnyPerm(array $perms): void
+    {
+        foreach ($perms as $p) {
+            if (User::can($p)) return;
+        }
+        $this->redirect('dashboard');
+        exit;
+    }
+
+    private function checkCsrf(): void
+    {
+        $token = $_POST['csrf'] ?? '';
+        if (empty($_SESSION['csrf']) || !hash_equals($_SESSION['csrf'], $token)) {
+            http_response_code(403);
+            exit('CSRF invalid');
+        }
+    }
+
+    public function index()
+    {
+        // Ici, on autorise toute personne ayant accès au panel admin
         $userModel = new User();
         $instanceModel = new Instance();
         $logModel = new Log();
 
-        // Statistiques pour l'accueil admin
         $count_users = $userModel->countAll();
         $count_instances = count($instanceModel->getAll());
-        
-        // Derniers logs
         $latest_logs = $logModel->getFiltered([], 5, 0);
 
         $this->render('admin/index', [
@@ -47,75 +73,212 @@ class Admin extends Controller {
     }
 
     /**
-     * Gestion des Utilisateurs
+     * Liste des utilisateurs
      */
     public function users() {
+        $this->requirePerm('manage_users');
         $userModel = new User();
 
         // --- SUPPRESSION ---
-        if (isset($_GET['delete_id'])) {
-            $targetId = $_GET['delete_id'];
-            
-            // Protection : on ne se supprime pas soi-même
-            if ($targetId == $_SESSION['user_id']) {
-                $_SESSION['flash_error'] = "Action impossible sur votre propre compte.";
+        if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_user'])) {
+            $this->checkCsrf();
+            $targetId = (int)($_POST['user_id'] ?? 0);
+
+            if ($targetId === (int)$_SESSION['user_id']) {
+                setToast("Action impossible sur votre propre compte.", "danger");
             } else {
                 $userModel->delete($targetId);
                 Log::add('DELETE_USER', "Suppression compte ID: " . $targetId);
-                $_SESSION['flash_success'] = "Utilisateur supprimé.";
+                setToast("Utilisateur supprimé avec succès.");
             }
             $this->redirect('admin/users');
         }
 
-        // --- AJOUT / ÉDITION ---
-        if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-            
-            // AJOUT
-            if (isset($_POST['add_user'])) {
-                try {
-                    $roleId = $_POST['role_id'];
-                    $userModel->create(
-                        $_POST['username'], 
-                        password_hash($_POST['password'], PASSWORD_DEFAULT), 
-                        $_POST['email'], 
-                        $roleId
-                    );
-                    Log::add('CREATE_USER', "Création utilisateur : " . $_POST['username']);
-                    $_SESSION['flash_success'] = "Utilisateur créé.";
-                } catch (\Exception $e) { 
-                    $_SESSION['flash_error'] = "Erreur : L'identifiant existe déjà."; 
-                }
-            }
-
-            // ÉDITION
-            if (isset($_POST['edit_user'])) {
-                $targetId = $_POST['user_id'];
-                $userModel->updateAdmin($targetId, $_POST['email'], $_POST['role_id']);
-                
-                if (!empty($_POST['password'])) { 
-                    $userModel->updatePassword($targetId, password_hash($_POST['password'], PASSWORD_DEFAULT)); 
-                }
-                
-                Log::add('UPDATE_USER', "Modif utilisateur ID : " . $targetId);
-                $_SESSION['flash_success'] = "Utilisateur mis à jour.";
-            }
-            
-            $this->redirect('admin/users');
-        }
-
-        // Liste des utilisateurs
-        $users = $userModel->getAllWithService(); // Méthode à renommer idéalement en getAllWithRoles() dans User.php
+        $limit = 20;
+        $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
+        $totalUsers = $userModel->countAll();
         
-        // Liste des rôles (en dur ou via DB si vous avez gardé la table roles)
-        // Ici on suppose que la table roles existe encore
-        $db = \app\core\Database::getConnection();
-        $roles = $db->query("SELECT * FROM roles ORDER BY id ASC")->fetchAll();
+        $users = $userModel->getPaginated($limit, ($page - 1) * $limit); 
+        foreach ($users as &$u) {
+            $u['permissions'] = $userModel->getPermissions((int)$u['id']);
+        }
 
         $this->render('admin/users', [
             'users' => $users,
-            'roles' => $roles
+            'csrf' => $_SESSION['csrf'] ?? '',
+            'page' => $page,
+            'totalPages' => ceil($totalUsers / $limit),
+            'totalUsers' => $totalUsers,
+            'limit' => $limit
         ]);
     }
+
+    /**
+     * API AJAX : Vérifier si l'email correspond à des membres d'instance
+     */
+    public function checkEmailMembers() {
+        header('Content-Type: application/json');
+        $this->requirePerm('manage_users');
+        
+        $email = $_GET['email'] ?? '';
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            echo json_encode([]);
+            exit;
+        }
+
+        $instanceModel = new Instance();
+        $orphans = $instanceModel->getOrphanMembresByEmail($email);
+        echo json_encode($orphans);
+        exit;
+    }
+
+    /**
+     * Page de création et modification d'utilisateur
+     */
+    public function userAdd() {
+        $this->requirePerm('manage_users');
+        $userModel = new User();
+        $catalog = \app\config\Permissions::LIST;
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $this->checkCsrf();
+            $username = trim($_POST['username'] ?? '');
+            $prenom   = trim($_POST['prenom'] ?? '');
+            $nom      = trim($_POST['nom'] ?? '');
+            $email    = trim($_POST['email'] ?? '');
+            $password = (string)($_POST['password'] ?? '');
+
+            // 1. Vérification de l'unicité de l'email
+            if ($userModel->findByEmail($email)) {
+                setToast("L'adresse mail {$email} est déjà utilisée par un autre compte.", "danger");
+                $this->redirect('admin/userAdd');
+                exit;
+            }
+
+            $slugs = $_POST['permissions'] ?? [];
+            if (!is_array($slugs)) $slugs = [];
+            $slugs = array_values(array_intersect($slugs, array_keys($catalog)));
+
+            try {
+                $newId = $userModel->create(
+                    $username,
+                    password_hash($password, PASSWORD_DEFAULT),
+                    $email,
+                    $prenom,
+                    $nom
+                );
+                $userModel->syncPermissions((int)$newId, $slugs);
+
+                if (!empty($_POST['link_membres'])) {
+                    $instanceModel = new Instance();
+                    foreach ($_POST['link_membres'] as $membreId) {
+                        $instanceModel->linkUserToMembre((int)$membreId, $newId);
+                    }
+                }
+
+                Log::add('CREATE_USER', "Création utilisateur : " . $username);
+                setToast("L'utilisateur a été créé avec succès.");
+                $this->redirect('admin/users');
+                exit;
+            } catch (\Exception $e) {
+                setToast("Erreur : L'identifiant de connexion existe déjà.", "danger");
+            }
+        }
+
+        $this->render('admin/user_create', [
+            'catalog' => $catalog,
+            'csrf' => $_SESSION['csrf'] ?? ''
+        ]);
+    }
+
+    public function userEdit($id = null) {
+        $this->requirePerm('manage_users');
+        if (!$id) {
+            $this->redirect('admin/users');
+            exit;
+        }
+
+        $userModel = new User();
+        $instanceModel = new Instance();
+        $catalog = \app\config\Permissions::LIST;
+
+        $user = $userModel->getById($id);
+        if (!$user) {
+            setToast("Utilisateur introuvable.", "danger");
+            $this->redirect('admin/users');
+            exit;
+        }
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $this->checkCsrf();
+            $email    = trim($_POST['email'] ?? '');
+            $prenom   = trim($_POST['prenom'] ?? '');
+            $nom      = trim($_POST['nom'] ?? '');
+
+            // 1. Vérification de l'unicité de l'email (en excluant l'utilisateur actuel)
+            $existing = $userModel->findByEmail($email);
+            if ($existing && $existing['id'] != $id) {
+                setToast("L'adresse mail {$email} est déjà utilisée par un autre compte.", "danger");
+                $this->redirect('admin/userEdit/' . $id);
+                exit;
+            }
+
+            $slugs = $_POST['permissions'] ?? [];
+            if (!is_array($slugs)) $slugs = [];
+            $slugs = array_values(array_intersect($slugs, array_keys($catalog)));
+
+            $userModel->updateAdmin($id, $email, $prenom, $nom);
+
+            if (!empty($_POST['password'])) {
+                $userModel->updatePassword($id, password_hash($_POST['password'], PASSWORD_DEFAULT));
+            }
+
+            $userModel->syncPermissions($id, $slugs);
+
+            if (!empty($_POST['link_membres'])) {
+                foreach ($_POST['link_membres'] as $membreId) {
+                    $instanceModel->linkUserToMembre((int)$membreId, $id);
+                }
+            }
+
+            Log::add('UPDATE_USER', "Modif utilisateur ID : " . $id);
+            setToast("Utilisateur mis à jour avec succès.");
+
+            if ((int)$id === (int)$_SESSION['user_id']) {
+                $_SESSION['permissions'] = $userModel->getPermissions($id);
+            }
+            $this->redirect('admin/users');
+            exit;
+        }
+
+        $user['permissions'] = $userModel->getPermissions($id);
+        $allInstances = $instanceModel->getAll();
+        $user['instances_manager'] = [];
+        $user['instances_membre'] = [];
+        
+        foreach ($allInstances as $inst) {
+            $managers = $instanceModel->getManagers($inst['id']);
+            if (in_array($id, $managers)) $user['instances_manager'][] = $inst;
+            
+            $membres = $instanceModel->getMembres($inst['id']);
+            foreach ($membres as $m) {
+                if ($m['user_id'] == $id) {
+                    $user['instances_membre'][] = $inst;
+                    break;
+                }
+            }
+        }
+        $orphanMembres = $instanceModel->getOrphanMembresByEmail($user['email']);
+
+        $this->render('admin/user_edit', [
+            'u' => $user,
+            'catalog' => $catalog,
+            'orphanMembres' => $orphanMembres,
+            'csrf' => $_SESSION['csrf'] ?? ''
+        ]);
+    }
+
+
 
     /**
      * Gestion des Instances
@@ -222,15 +385,14 @@ class Admin extends Controller {
         // --- PRÉPARATION DES DONNÉES POUR LA VUE ---
         $instances = $instanceModel->getAll();
         
-        // Pour chaque instance, on attache ses relations (Managers et Membres complets)
         foreach ($instances as &$inst) {
             $inst['managers'] = $instanceModel->getManagers($inst['id']);
-            $inst['membres'] = $instanceModel->getMembres($inst['id']); 
+            $inst['membres'] = $instanceModel->getMembres($inst['id']);
         }
 
         $this->render('admin/instances', [
             'instances' => $instances,
-            'all_users' => $userModel->getAllWithService() // Sert pour l'autocomplétion JS (Capsules + Lien de compte)
+            'all_users' => $userModel->getList() // ou autre méthode compatible
         ]);
     }
 
@@ -238,14 +400,15 @@ class Admin extends Controller {
     /**
      * Logs Système
      */
-    public function logs() {
+
+    public function logs()
+    {
+        $this->requirePerm('view_logs');
+
         $logModel = new Log();
-        
         $limit = 50;
         $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
-        $filters = [
-            'search' => $_GET['search'] ?? ''
-        ];
+        $filters = ['search' => $_GET['search'] ?? ''];
 
         $totalLogs = $logModel->countFiltered($filters);
 
