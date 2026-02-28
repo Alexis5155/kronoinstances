@@ -24,6 +24,12 @@ class Permissions {
             'desc' => 'Générer les ODT et gérer l\'envoi des convocations',
             'cat' => 'Gestion métier'
         ],
+        'depot_document' => [
+            'nom' => 'Déposer des documents',
+            'desc' => 'Autorise le dépôt manuel de documents dans l\'espace personnel des membres',
+            'cat' => 'Gestion métier'
+        ],
+
 
         // --- WORKFLOW DES SÉANCES ---
         'avancer_etapes' => [

@@ -27,24 +27,60 @@ class Seances extends Controller {
 
         $instances = $instanceModel->getAll();
 
-        $seances = [];
+        // Récupération des filtres
+        $search_instance = $_GET['search_instance'] ?? '';
+        $search_date = $_GET['search_date'] ?? '';
+
+        $toutes_seances = [];
         foreach ($instances as $inst) {
+            // Filtrage par instance
+            if (!empty($search_instance) && $inst['id'] != $search_instance) {
+                continue;
+            }
+
             $instSeances = $seanceModel->getByInstance($inst['id']);
             foreach ($instSeances as $s) {
+                // Filtrage par date
+                if (!empty($search_date) && $s['date_seance'] != $search_date) {
+                    continue;
+                }
+
                 $s['instance_nom'] = $inst['nom'];
-                $seances[] = $s;
+                $toutes_seances[] = $s;
             }
         }
 
-        // Trier toutes les séances par date (les plus récentes / futures d'abord)
-        usort($seances, function($a, $b) {
+        // Séparation en deux listes : Futures (y compris aujourd'hui) et Passées
+        $seances_futures = [];
+        $seances_passees = [];
+        $today = date('Y-m-d');
+
+        foreach ($toutes_seances as $s) {
+            // "Terminée" force la séance dans les passées, sinon on regarde la date
+            if ($s['statut'] === 'terminee' || $s['date_seance'] < $today) {
+                $seances_passees[] = $s;
+            } else {
+                $seances_futures[] = $s;
+            }
+        }
+
+        // Tri : Futures = les plus proches en premier (croissant)
+        usort($seances_futures, function($a, $b) {
+            return strtotime($a['date_seance']) - strtotime($b['date_seance']);
+        });
+
+        // Tri : Passées = les plus récentes en premier (décroissant)
+        usort($seances_passees, function($a, $b) {
             return strtotime($b['date_seance']) - strtotime($a['date_seance']);
         });
 
         $this->render('seances/index', [
             'title' => 'Gestion des Séances',
             'instances' => $instances,
-            'seances' => $seances
+            'seances_futures' => $seances_futures,
+            'seances_passees' => $seances_passees,
+            'search_instance' => $search_instance,
+            'search_date' => $search_date
         ]);
     }
 

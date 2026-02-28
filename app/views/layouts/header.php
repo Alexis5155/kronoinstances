@@ -11,7 +11,7 @@
         
         /* NAVBAR STICKY */
         .navbar { border-bottom: 1px solid rgba(255,255,255,0.05); z-index: 1030; }
-        .nav-link { font-size: 0.9rem; font-weight: 500; transition: all 0.2s; }
+        .nav-link { font-size: 0.9rem; font-weight: 500; transition: all 0.2s; padding-left: 0.5rem !important; padding-right: 0.5rem !important; }
         .navbar-dark .navbar-nav .nav-link:hover, .nav-link.active-link { color: #0dcaf0 !important; }
         
         /* AVATAR MINIATURE */
@@ -19,7 +19,7 @@
             width: 30px; height: 30px; background: #0dcaf0; color: #000;
             font-size: 0.85rem; font-weight: 700; display: inline-flex;
             align-items: center; justify-content: center; 
-            border-radius: 50%; /* Changé en 50% pour faire un cercle parfait */
+            border-radius: 50%;
             transition: transform 0.2s;
         }
         .active-account .nav-avatar { transform: scale(1.1); box-shadow: 0 0 10px rgba(13, 202, 240, 0.4); }
@@ -60,7 +60,15 @@
             .dropdown-notifications { position: absolute !important; right: 0 !important; left: auto !important; }
         }
 
+        @media (max-width: 1199px) {
+            /* Optimisation espace sur tablettes/petits PC pour éviter le retour à la ligne */
+            .navbar-brand span { display: none; } /* Cache le texte "KronoInstances" */
+            .nav-link { font-size: 0.85rem; }
+            .header-right-zone { gap: 0.5rem !important; }
+        }
+
         @media (max-width: 991.98px) {
+            .navbar-brand span { display: inline; } /* Réaffiche le texte sur mobile */
             .position-static-mobile { position: static !important; }
             .header-right-zone {
                 justify-content: center !important; width: 100% !important;
@@ -74,7 +82,7 @@
         }
 
         /* SÉPARATEURS & BOUTONS */
-        .header-divider { width: 1px; height: 24px; background-color: rgba(255,255,255,0.15); align-self: center; }
+        .header-divider { width: 1px; height: 24px; background-color: rgba(255,255,255,0.15); align-self: center; margin: 0 0.5rem; }
         .btn-logout {
             width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
             border-radius: 50% !important; transition: all 0.2s; border: none; background: transparent;
@@ -104,8 +112,9 @@ if (isset($_SESSION['user_id'])) {
 $current_url  = $_GET['url'] ?? ''; 
 $is_dash      = (strpos($current_url, 'dashboard') !== false);
 $is_seances   = (strpos($current_url, 'seances') !== false);
-$is_instances = (strpos($current_url, 'admin/instances') !== false); // Les instances sont une partie Admin Métier
-$is_admin     = (strpos($current_url, 'admin') !== false && !$is_instances); // Menu "Administration logicielle"
+$is_docs      = (strpos($current_url, 'documents') !== false); // Nouvelle page Documents
+$is_instances = (strpos($current_url, 'admin/instances') !== false); 
+$is_admin     = (strpos($current_url, 'admin') !== false); // Le menu Admin sera actif sur tout le dossier admin/
 $is_notif     = (strpos($current_url, 'notifications') !== false);
 $is_compte    = (strpos($current_url, 'compte') !== false);
 
@@ -113,7 +122,8 @@ $is_compte    = (strpos($current_url, 'compte') !== false);
 $hasAdminAccess = (
     User::can('view_logs') || 
     User::can('manage_users') || 
-    User::can('manage_system')
+    User::can('manage_system') ||
+    User::can('manage_instances') // L'accès au menu admin est requis si on gère les instances
 );
 
 // Préparation du nom à afficher (Prénom NOM ou Username par défaut)
@@ -128,7 +138,7 @@ if (!empty($_SESSION['prenom']) && !empty($_SESSION['nom'])) {
 
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4 shadow-sm no-print py-2 sticky-top">
     <div class="container">
-        <a class="navbar-brand fw-bold d-flex align-items-center" href="<?= URLROOT ?>/dashboard">
+        <a class="navbar-brand fw-bold d-flex align-items-center me-2" href="<?= URLROOT ?>/dashboard">
             <div class="bg-info bg-opacity-10 rounded p-1 me-2 d-flex align-items-center justify-content-center" style="width: 32px; height: 32px;">
                 <i class="bi bi-calendar2-range text-info" style="font-size: 1.2rem;"></i>
             </div>
@@ -140,52 +150,63 @@ if (!empty($_SESSION['prenom']) && !empty($_SESSION['nom'])) {
         </button>
 
         <div class="collapse navbar-collapse" id="navbarNav">
-            <ul class="navbar-nav me-auto ms-lg-3 gap-1">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
                 <li class="nav-item">
                     <a class="nav-link d-flex align-items-center <?= $is_dash ? 'active-link' : '' ?>" href="<?= URLROOT ?>/dashboard">
-                        <i class="bi bi-grid-1x2 me-2"></i> Tableau de bord
+                        <i class="bi bi-grid-1x2 me-1"></i> Tableau de bord
                     </a>
                 </li>
                 
                 <li class="nav-item">
                     <a class="nav-link d-flex align-items-center <?= $is_seances ? 'active-link' : '' ?>" href="<?= URLROOT ?>/seances">
-                        <i class="bi bi-card-list me-2"></i> Séances
+                        <i class="bi bi-calendar-event me-1"></i> Séances
+                    </a>
+                </li>
+
+                <li class="nav-item">
+                    <a class="nav-link d-flex align-items-center <?= $is_docs ? 'active-link' : '' ?>" href="<?= URLROOT ?>/documents">
+                        <i class="bi bi-folder2-open me-1"></i> Mes documents
                     </a>
                 </li>
 
                 <?php if (isset($_SESSION['user_id']) && $hasAdminAccess): ?>
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle d-flex align-items-center <?= $is_admin ? 'active-link text-info fw-bold' : '' ?>" href="#" id="adminDrop" role="button" data-bs-toggle="dropdown">
-                        <i class="bi bi-shield-lock-fill me-2"></i> Administration
+                        <i class="bi bi-gear-fill me-1"></i> Administration
                     </a>
                     <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-admin mt-lg-2">
                         <li><a class="dropdown-item fw-bold text-info bg-info bg-opacity-10 mb-2" href="<?= URLROOT ?>/admin"><i class="bi bi-speedometer me-2"></i> Vue d'ensemble</a></li>
                         
-                        <?php if (User::can('view_logs')): ?>
-                            <li><h6 class="dropdown-header mt-2">Traçabilité</h6></li>
+                        <?php if (User::can('manage_instances')): ?>
+                            <li><h6 class="dropdown-header mt-2">Gestion Métier</h6></li>
+                            <li><a class="dropdown-item <?= $is_instances ? 'active' : '' ?>" href="<?= URLROOT ?>/admin/instances"><i class="bi bi-diagram-3 me-2 opacity-50"></i>Instances & Collèges</a></li>
+                        <?php endif; ?>
+
+                        <?php if (User::can('view_logs') || User::can('manage_users') || User::can('manage_system')): ?>
+                            <li><hr class="dropdown-divider opacity-10 my-2"></li>
+                            <li><h6 class="dropdown-header">Système & Sécurité</h6></li>
+                            
+                            <?php if (User::can('view_logs')): ?>
                             <li><a class="dropdown-item" href="<?= URLROOT ?>/admin/logs"><i class="bi bi-fingerprint me-2 opacity-50"></i>Journal d'Audit</a></li>
-                        <?php endif; ?>
-                        
-                        <?php if (User::can('manage_users')): ?>
-                            <li><hr class="dropdown-divider opacity-10 my-2"></li>
-                            <li><h6 class="dropdown-header">Utilisateurs</h6></li>
+                            <?php endif; ?>
+                            
+                            <?php if (User::can('manage_users')): ?>
                             <li><a class="dropdown-item" href="<?= URLROOT ?>/admin/users"><i class="bi bi-people me-2 opacity-50"></i>Comptes & Permissions</a></li>
-                        <?php endif; ?>
-                        
-                        <?php if (User::can('manage_system')): ?>
-                            <li><hr class="dropdown-divider opacity-10 my-2"></li>
-                            <li><h6 class="dropdown-header">Configuration</h6></li>
+                            <?php endif; ?>
+                            
+                            <?php if (User::can('manage_system')): ?>
                             <li><a class="dropdown-item" href="<?= URLROOT ?>/admin/parametres"><i class="bi bi-sliders2 me-2 opacity-50"></i>Paramètres système</a></li>
+                            <?php endif; ?>
                         <?php endif; ?>
                     </ul>
                 </li>
                 <?php endif; ?>
             </ul>
             
-            <div class="d-flex align-items-center gap-3 header-right-zone">
+            <div class="d-flex align-items-center header-right-zone">
                 <div class="dropdown position-static-mobile"> 
                     <div class="bell-container dropdown-toggle <?= $is_notif ? 'text-info' : 'text-white-50' ?>" 
-                         data-bs-toggle="dropdown" data-bs-display="static">
+                         data-bs-toggle=\"dropdown\" data-bs-display="static">
                         <i class="bi bi-bell fs-5"></i>
                         <?php if($unreadCount > 0): ?>
                             <span class="notification-badge"><?= $unreadCount > 9 ? '9+' : $unreadCount ?></span>
@@ -223,11 +244,11 @@ if (!empty($_SESSION['prenom']) && !empty($_SESSION['nom'])) {
 
                 <div class="header-divider d-none d-lg-block"></div>
 
-                <a href="<?= URLROOT ?>/compte" class="nav-link text-white d-flex align-items-center gap-2 py-1 px-2 rounded hover-white <?= $is_compte ? 'text-info active-account active-link' : '' ?>">
+                <a href="<?= URLROOT ?>/compte" class="nav-link text-white d-flex align-items-center gap-2 py-1 px-2 rounded hover-white <?= $is_compte ? 'text-info active-account active-link' : '' ?>" style="white-space: nowrap;">
                     <div class="nav-avatar">
                         <?= $initiale ?>
                     </div>
-                    <span class="small fw-bold"><?= $display_name ?></span>
+                    <span class="small fw-bold d-none d-sm-inline"><?= $display_name ?></span>
                 </a>
 
                 <div class="header-divider d-none d-lg-block"></div>
