@@ -37,10 +37,9 @@ class Login extends Controller {
                     // 3. Mise en session des informations utilisateur
                     $_SESSION['user_id']     = $user['id'];
                     $_SESSION['username']    = $user['username'];
-                    $_SESSION['role_id']     = $user['role_id'];
-                    $_SESSION['user_power']  = $user['role_power'];
-                    $_SESSION['service_id']  = $user['service_id'];
                     $_SESSION['permissions'] = $user['permissions'];
+                    $_SESSION['prenom'] = $user['prenom'];
+                    $_SESSION['nom'] = $user['nom'];       
 
                     // Redirection : priorité au champ 'return' du POST (si présent dans un champ caché), 
                     // sinon au 'return' du GET, sinon par défaut 'dashboard'

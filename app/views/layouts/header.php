@@ -16,9 +16,10 @@
         
         /* AVATAR MINIATURE */
         .nav-avatar {
-            width: 28px; height: 28px; background: #0dcaf0; color: #000;
-            font-size: 0.75rem; font-weight: 700; display: inline-flex;
-            align-items: center; justify-content: center; border-radius: 6px;
+            width: 30px; height: 30px; background: #0dcaf0; color: #000;
+            font-size: 0.85rem; font-weight: 700; display: inline-flex;
+            align-items: center; justify-content: center; 
+            border-radius: 50%; /* Changé en 50% pour faire un cercle parfait */
             transition: transform 0.2s;
         }
         .active-account .nav-avatar { transform: scale(1.1); box-shadow: 0 0 10px rgba(13, 202, 240, 0.4); }
@@ -114,6 +115,15 @@ $hasAdminAccess = (
     User::can('manage_users') || 
     User::can('manage_system')
 );
+
+// Préparation du nom à afficher (Prénom NOM ou Username par défaut)
+$display_name = $_SESSION['username'] ?? 'Utilisateur';
+$initiale = strtoupper(substr($display_name, 0, 1));
+
+if (!empty($_SESSION['prenom']) && !empty($_SESSION['nom'])) {
+    $display_name = htmlspecialchars($_SESSION['prenom']) . ' ' . strtoupper(htmlspecialchars($_SESSION['nom']));
+    $initiale = strtoupper(substr($_SESSION['prenom'], 0, 1));
+}
 ?>
 
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4 shadow-sm no-print py-2 sticky-top">
@@ -142,14 +152,6 @@ $hasAdminAccess = (
                         <i class="bi bi-card-list me-2"></i> Séances
                     </a>
                 </li>
-
-                <?php if (User::can('manage_instances')): ?>
-                <li class="nav-item">
-                    <a class="nav-link d-flex align-items-center <?= $is_instances ? 'active-link' : '' ?>" href="<?= URLROOT ?>/admin/instances">
-                        <i class="bi bi-diagram-3 me-2"></i> Instances
-                    </a>
-                </li>
-                <?php endif; ?>
 
                 <?php if (isset($_SESSION['user_id']) && $hasAdminAccess): ?>
                 <li class="nav-item dropdown">
@@ -223,9 +225,9 @@ $hasAdminAccess = (
 
                 <a href="<?= URLROOT ?>/compte" class="nav-link text-white d-flex align-items-center gap-2 py-1 px-2 rounded hover-white <?= $is_compte ? 'text-info active-account active-link' : '' ?>">
                     <div class="nav-avatar">
-                        <?= strtoupper(substr($_SESSION['username'] ?? 'U', 0, 1)) ?>
+                        <?= $initiale ?>
                     </div>
-                    <span class="small fw-bold"><?= htmlspecialchars($_SESSION['username'] ?? '') ?></span>
+                    <span class="small fw-bold"><?= $display_name ?></span>
                 </a>
 
                 <div class="header-divider d-none d-lg-block"></div>

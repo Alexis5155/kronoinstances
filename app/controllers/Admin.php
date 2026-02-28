@@ -5,10 +5,15 @@ use app\core\Controller;
 use app\models\User;
 use app\models\Instance;
 use app\models\Log;
+use app\models\Parametre;
 use app\config\Permissions;
 
 class Admin extends Controller
 {
+    // ==========================================
+    // 1. CONSTRUCTEUR ET SÉCURITÉ
+    // ==========================================
+
     public function __construct()
     {
         // 1) Auth obligatoire
@@ -53,33 +58,276 @@ class Admin extends Controller
         }
     }
 
-    public function index()
-    {
-        // Ici, on autorise toute personne ayant accès au panel admin
+    // ==========================================
+    // 2. ACCUEIL ADMINISTRATION
+    // ==========================================
+
+    public function index() {
         $userModel = new User();
         $instanceModel = new Instance();
         $logModel = new Log();
+        
+        // --- Vérification des mises à jour (Via API Github) ---
+        $has_update = false;
+        $new_v_name = '';
 
+        if (User::can('manage_system')) {
+            $opts = ['http' => ['method' => 'GET', 'header' => ['User-Agent: KronoInstances-App'], 'timeout' => 2]];
+            $context = stream_context_create($opts);
+            
+            $url = "https://api.github.com/repos/Alexis5155/kronoinstances/releases/latest";
+            
+            $res = @file_get_contents($url, false, $context);
+            if ($res) {
+                $release = json_decode($res, true);
+                if (isset($release['tag_name'])) {
+                    $new_version = $release['tag_name'];
+                    if (defined('APP_VERSION') && version_compare($new_version, APP_VERSION, '>')) {
+                        $has_update = true;
+                        $new_v_name = $new_version;
+                    }
+                }
+            }
+        }
+
+        // --- Statistiques ---
         $count_users = $userModel->countAll();
-        $count_instances = count($instanceModel->getAll());
-        $latest_logs = $logModel->getFiltered([], 5, 0);
+        $all_instances = $instanceModel->getAll();
+        $count_instances = count($all_instances);
+        
+        $count_membres = 0;
+        foreach ($all_instances as $inst) {
+            $count_membres += count($instanceModel->getMembres($inst['id']));
+        }
 
         $this->render('admin/index', [
             'title' => 'Administration',
             'count_users' => $count_users,
             'count_instances' => $count_instances,
-            'latest_logs' => $latest_logs
+            'count_membres' => $count_membres,
+            'has_update' => $has_update,
+            'new_v_name' => $new_v_name
         ]);
     }
 
+    // ==========================================
+    // 3. PARAMÈTRES (Section découpée)
+    // ==========================================
+
+    public function parametres() {
+        // Redirection si aucun droit d'accès
+        if (!User::can('manage_system')) {
+            setToast("Accès non autorisé.", "danger");
+            $this->redirect('admin');
+            exit;
+        }
+
+        $paramModel = new Parametre();
+        $section = $_GET['section'] ?? 'general';
+
+        $allowed_sections = ['general', 'smtp', 'system', 'update'];
+        if (!in_array($section, $allowed_sections)) {
+            $section = 'general';
+        }
+
+        // --- TRAITEMENT POST ---
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $this->checkCsrf();
+            $action = $_POST['action'] ?? '';
+
+            // 1. Général (Base de données)
+            if ($action === 'update_general') {
+                $colName = trim($_POST['col_name'] ?? '');
+                $paramModel->set('collectivite_nom', $colName);
+                Log::add('UPDATE_PARAM', "Mise à jour du nom de la collectivité : " . $colName);
+                setToast("Nom de la collectivité mis à jour.");
+                $this->redirect('admin/parametres?section=general');
+            }
+
+            // 2. Base de données (Réécriture config.php)
+            if ($action === 'update_system') {
+                $db_host = trim($_POST['db_host'] ?? '');
+                $db_name = trim($_POST['db_name'] ?? '');
+                $db_user = trim($_POST['db_user'] ?? '');
+                $db_pass = trim($_POST['db_pass'] ?? ''); // Le mot de passe peut être vide localement
+                
+                // Vérification du mot de passe de l'utilisateur connecté pour cette action critique
+                $confirm_password = $_POST['confirm_password'] ?? '';
+                $currentUser = (new User())->getById($_SESSION['user_id']);
+                
+                if (!password_verify($confirm_password, $currentUser['password'])) {
+                    setToast("Mot de passe administrateur incorrect.", "danger");
+                    $this->redirect('admin/parametres?section=system');
+                    exit;
+                }
+
+                $updates = [
+                    'DB_HOST' => $db_host,
+                    'DB_NAME' => $db_name,
+                    'DB_USER' => $db_user,
+                    'DB_PASS' => $db_pass
+                ];
+
+                if ($this->updateConfigFile($updates)) {
+                    Log::add('UPDATE_PARAM', "Mise à jour des identifiants de base de données");
+                    setToast("Configuration base de données enregistrée avec succès. Déconnexion requise si les identifiants ont changé.");
+                } else {
+                    setToast("Erreur d'écriture dans app/config/config.php. Vérifiez les droits.", "danger");
+                }
+                $this->redirect('admin/parametres?section=system');
+            }
+
+            // 3. SMTP (Réécriture config.php)
+            if ($action === 'update_smtp') {
+                $updates = [
+                    'MAIL_HOST' => trim($_POST['smtp_host'] ?? ''),
+                    'MAIL_PORT' => trim($_POST['smtp_port'] ?? '587'),
+                    'MAIL_USER' => trim($_POST['smtp_user'] ?? ''),
+                    'MAIL_FROM' => trim($_POST['smtp_from'] ?? '')
+                ];
+
+                // On ne modifie le mot de passe que s'il a été rempli
+                if (!empty($_POST['smtp_pass'])) {
+                    $updates['MAIL_PASS'] = trim($_POST['smtp_pass']);
+                }
+
+                if ($this->updateConfigFile($updates)) {
+                    Log::add('UPDATE_PARAM', "Mise à jour de la configuration SMTP");
+                    setToast("Configuration email enregistrée avec succès.");
+                } else {
+                    setToast("Erreur d'écriture dans app/config/config.php. Vérifiez les droits.", "danger");
+                }
+                $this->redirect('admin/parametres?section=smtp');
+            }
+
+            // 4. Test d'envoi Email
+            if ($action === 'test_email') {
+                $testEmail = trim($_POST['test_email_address'] ?? '');
+                
+                if (filter_var($testEmail, FILTER_VALIDATE_EMAIL)) {
+                    $subject = "Test de configuration SMTP - KronoInstances";
+                    $body = "
+                        <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;'>
+                            <h2 style='color: #0d6efd;'>Test réussi ! ✅</h2>
+                            <p>Victoire !</p>
+                            <p>Si vous lisez ce message, cela signifie que votre configuration SMTP sur <b>KronoInstances</b> fonctionne parfaitement.</p>
+                        </div>
+                    ";
+
+                    // Utilisation de la classe Mailer
+                    $success = \app\core\Mailer::send($testEmail, $subject, $body);
+
+                    if ($success) {
+                        setToast("Un email de test a été envoyé avec succès à $testEmail.", "success");
+                        Log::add('SYSTEM_TEST', "Email de test envoyé à $testEmail");
+                    } else {
+                        setToast("Échec de l'envoi. Vérifiez votre configuration SMTP et les journaux de votre serveur.", "danger");
+                    }
+                } else {
+                    setToast("Adresse email de test invalide.", "warning");
+                }
+                $this->redirect('admin/parametres?section=smtp');
+            }
+
+            // 5. Update system...
+            if ($action === 'update_update_settings') {
+                $track = trim($_POST['update_track'] ?? 'main');
+                $paramModel->set('update_track', $track);
+                setToast("Canal de mise à jour défini sur : " . ucfirst($track));
+                $this->redirect('admin/parametres?section=update');
+            }
+        }
+
+        // --- PRÉPARATION DES DONNÉES POUR LES VUES ---
+        $data = [
+            'title' => 'Paramètres Système',
+            'section' => $section,
+            'csrf' => $_SESSION['csrf'] ?? ''
+        ];
+
+        if ($section === 'general') {
+            $data['col_nom'] = $paramModel->get('collectivite_nom') ?: 'KronoInstances';
+        }
+        elseif ($section === 'update') {
+            $data['update_track'] = $paramModel->get('update_track') ?: 'main';
+            $data['update_data'] = null;
+
+            $opts = ['http' => ['method' => 'GET', 'header' => ['User-Agent: KronoInstances-App'], 'timeout' => 3]];
+            $context = stream_context_create($opts);
+            
+            $url = ($data['update_track'] === 'beta') 
+                ? "https://api.github.com/repos/Alexis5155/kronoinstances/releases" 
+                : "https://api.github.com/repos/Alexis5155/kronoinstances/releases/latest";
+
+            $res = @file_get_contents($url, false, $context);
+            if ($res) {
+                $releaseList = json_decode($res, true);
+                $release = ($data['update_track'] === 'beta') ? ($releaseList[0] ?? null) : $releaseList;
+
+                if ($release && isset($release['tag_name'])) {
+                    $new_version = $release['tag_name'];
+                    $current_version = defined('APP_VERSION') ? APP_VERSION : '0.0.0';
+                    $data['update_data'] = [
+                        'version' => $new_version,
+                        'has_new' => version_compare($new_version, $current_version, '>'),
+                        'changelog' => $release['body'] ?? 'Aucune note de version.'
+                    ];
+                }
+            }
+        }
+
+        $this->render('admin/parametres/_wrapper', $data);
+    }
+
     /**
-     * Liste des utilisateurs
+     * Méthode pour mettre à jour le fichier config.php
      */
+    private function updateConfigFile(array $updates): bool {
+        $configFile = __DIR__ . '/../config/config.php';
+        
+        if (!file_exists($configFile) || !is_writable($configFile)) {
+            return false;
+        }
+
+        $content = file_get_contents($configFile);
+
+        foreach ($updates as $key => $value) {
+            // Échapper les apostrophes et antislashs pour ne pas casser le PHP
+            $safeValue = addslashes($value);
+            
+            // Cherche : define('MA_CONSTANTE', 'ancienne_valeur');
+            // Remplace par : define('MA_CONSTANTE', 'nouvelle_valeur');
+            $pattern = "/define\(\s*['\"]" . preg_quote($key, '/') . "['\"]\s*,\s*['\"].*?['\"]\s*\);/s";
+            $replacement = "define('" . $key . "', '" . $safeValue . "');";
+            
+            // Si la constante existe, on la remplace
+            if (preg_match($pattern, $content)) {
+                $content = preg_replace($pattern, $replacement, $content);
+            } else {
+                // Si la constante n'existe pas (ex: ajout lors d'une maj), on l'ajoute à la fin avant la balise PHP fermante
+                // Si la balise fermante n'existe pas, on l'ajoute à la toute fin
+                $newDefine = "\ndefine('" . $key . "', '" . $safeValue . "');\n";
+                if (strpos($content, '?>') !== false) {
+                    $content = str_replace('?>', $newDefine . '?>', $content);
+                } else {
+                    $content .= $newDefine;
+                }
+            }
+        }
+
+        return file_put_contents($configFile, $content) !== false;
+    }
+
+
+
+    // ==========================================
+    // 4. GESTION DES UTILISATEURS
+    // ==========================================
+
     public function users() {
         $this->requirePerm('manage_users');
         $userModel = new User();
 
-        // --- SUPPRESSION ---
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_user'])) {
             $this->checkCsrf();
             $targetId = (int)($_POST['user_id'] ?? 0);
@@ -113,9 +361,6 @@ class Admin extends Controller
         ]);
     }
 
-    /**
-     * API AJAX : Vérifier si l'email correspond à des membres d'instance
-     */
     public function checkEmailMembers() {
         header('Content-Type: application/json');
         $this->requirePerm('manage_users');
@@ -132,9 +377,6 @@ class Admin extends Controller
         exit;
     }
 
-    /**
-     * Page de création et modification d'utilisateur
-     */
     public function userAdd() {
         $this->requirePerm('manage_users');
         $userModel = new User();
@@ -148,7 +390,6 @@ class Admin extends Controller
             $email    = trim($_POST['email'] ?? '');
             $password = (string)($_POST['password'] ?? '');
 
-            // 1. Vérification de l'unicité de l'email
             if ($userModel->findByEmail($email)) {
                 setToast("L'adresse mail {$email} est déjà utilisée par un autre compte.", "danger");
                 $this->redirect('admin/userAdd');
@@ -215,7 +456,6 @@ class Admin extends Controller
             $prenom   = trim($_POST['prenom'] ?? '');
             $nom      = trim($_POST['nom'] ?? '');
 
-            // 1. Vérification de l'unicité de l'email (en excluant l'utilisateur actuel)
             $existing = $userModel->findByEmail($email);
             if ($existing && $existing['id'] != $id) {
                 setToast("L'adresse mail {$email} est déjà utilisée par un autre compte.", "danger");
@@ -278,18 +518,14 @@ class Admin extends Controller
         ]);
     }
 
+    // ==========================================
+    // 5. GESTION DES INSTANCES
+    // ==========================================
 
-
-    /**
-     * Gestion des Instances
-     */
     public function instances() {
-        // Sécurité : Vérifiez ici les droits nécessaires si besoin (ex: User::can('manage_instances'))
-
         $instanceModel = new Instance();
         $userModel = new User();
 
-        // --- SUPPRESSION ---
         if (isset($_GET['delete_id'])) {
             $targetId = (int)$_GET['delete_id'];
             $inst = $instanceModel->getById($targetId);
@@ -301,7 +537,6 @@ class Admin extends Controller
             $this->redirect('admin/instances');
         }
 
-        // --- SAUVEGARDE UNIQUE (Création ou Édition + Managers + Membres) ---
         if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['save_instance'])) {
             $id = $_POST['instance_id'] ?? null;
             $nom = trim($_POST['nom']);
@@ -310,10 +545,8 @@ class Admin extends Controller
             $nbSup = (int)($_POST['nb_suppleants'] ?? 0);
             $quorum = (int)($_POST['quorum'] ?? 0);
 
-            // Récupération des tableaux
-            $managers = $_POST['managers'] ?? []; // Tableau d'IDs issus des capsules
+            $managers = $_POST['managers'] ?? [];
             
-            // Décodage du JSON contenant le tableau détaillé des membres
             $membresJson = $_POST['membres_json'] ?? '[]';
             $membresArray = json_decode($membresJson, true);
             if (!is_array($membresArray)) {
@@ -322,7 +555,6 @@ class Admin extends Controller
 
             if (!empty($nom)) {
                 if (empty($id)) {
-                    // CRÉATION
                     $newId = $instanceModel->create($nom, $desc, $nbTit, $nbSup, $quorum);
                     if ($newId) {
                         $instanceModel->setManagers($newId, $managers);
@@ -333,7 +565,6 @@ class Admin extends Controller
                         setToast("Erreur lors de la création de l'instance.", "danger");
                     }
                 } else {
-                    // MISE À JOUR
                     $instanceModel->update($id, $nom, $desc, $nbTit, $nbSup, $quorum);
                     $instanceModel->setManagers($id, $managers);
                     $instanceModel->setMembres($id, $membresArray);
@@ -346,7 +577,6 @@ class Admin extends Controller
             $this->redirect('admin/instances');
         }
 
-        // --- UPLOAD DU MODÈLE DE CONVOCATION (.ODT) ---
         if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['upload_modele'])) {
             $instanceId = (int)$_POST['instance_id'];
             if (isset($_FILES['modele_odt']) && $_FILES['modele_odt']['error'] === UPLOAD_ERR_OK) {
@@ -357,7 +587,6 @@ class Admin extends Controller
                     $uploadDir = 'uploads/modeles/';
                     if (!is_dir($uploadDir)) { mkdir($uploadDir, 0777, true); }
                     
-                    // On force ce nom précis pour s'affranchir de la base de données
                     $destPath = $uploadDir . 'modele_instance_' . $instanceId . '.odt';
                     if (move_uploaded_file($_FILES['modele_odt']['tmp_name'], $destPath)) {
                         Log::add('UPDATE_INSTANCE', "Upload du modèle de convocation pour l'instance ID: " . $instanceId);
@@ -370,7 +599,6 @@ class Admin extends Controller
             $this->redirect('admin/instances');
         }
         
-        // --- SUPPRESSION DU MODÈLE DE CONVOCATION ---
         if (isset($_GET['delete_modele_id'])) {
             $targetId = (int)$_GET['delete_modele_id'];
             $path = 'uploads/modeles/modele_instance_' . $targetId . '.odt';
@@ -382,9 +610,7 @@ class Admin extends Controller
             $this->redirect('admin/instances');
         }
 
-        // --- PRÉPARATION DES DONNÉES POUR LA VUE ---
         $instances = $instanceModel->getAll();
-        
         foreach ($instances as &$inst) {
             $inst['managers'] = $instanceModel->getManagers($inst['id']);
             $inst['membres'] = $instanceModel->getMembres($inst['id']);
@@ -392,14 +618,13 @@ class Admin extends Controller
 
         $this->render('admin/instances', [
             'instances' => $instances,
-            'all_users' => $userModel->getList() // ou autre méthode compatible
+            'all_users' => $userModel->getList() 
         ]);
     }
 
-
-    /**
-     * Logs Système
-     */
+    // ==========================================
+    // 6. LOGS SYSTÈME
+    // ==========================================
 
     public function logs()
     {

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mon Compte - KronoActes</title>
+    <title>Mon Compte - KronoInstances</title>
     <style>
         /* Avatar stylisé */
         .avatar-circle {
@@ -55,22 +55,42 @@
                     </div>
                     <div class="card-body p-4">
                         <form method="POST" action="<?= URLROOT ?>/compte">
-                            <input type="hidden" name="csrf_token" value="<?= $csrf_token ?>">
+                            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token ?? '') ?>">
                             
+                            <!-- Ligne Nom / Prénom en lecture seule -->
                             <div class="row g-3 mb-4">
                                 <div class="col-md-6">
-                                    <label class="form-label text-uppercase text-muted fw-bold small">Identifiant</label>
+                                    <label class="form-label text-uppercase text-muted fw-bold small">Prénom</label>
+                                    <input type="text" class="form-control bg-light text-muted" value="<?= htmlspecialchars($user['prenom'] ?? '') ?>" readonly>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label text-uppercase text-muted fw-bold small">Nom</label>
+                                    <input type="text" class="form-control bg-light text-muted" value="<?= htmlspecialchars($user['nom'] ?? '') ?>" readonly>
+                                </div>
+                                <div class="col-12 mt-1">
+                                    <div class="form-text x-small italic text-muted">
+                                        <i class="bi bi-info-circle me-1"></i> Ces informations sont définies par l'administration. En cas d'erreur, veuillez contacter un administrateur.
+                                    </div>
+                                </div>
+                            </div>
+
+                            <hr class="border-light my-4">
+
+                            <!-- Ligne Identifiant / Email -->
+                            <div class="row g-3 mb-4">
+                                <div class="col-md-6">
+                                    <label class="form-label text-uppercase text-muted fw-bold small">Identifiant de connexion</label>
                                     <div class="input-group">
                                         <span class="input-group-text bg-light border-end-0"><i class="bi bi-at"></i></span>
-                                        <input type="text" class="form-control bg-light border-start-0 fw-bold" value="<?= htmlspecialchars($user['username']) ?>" readonly disabled>
+                                        <input type="text" class="form-control bg-light border-start-0 fw-bold text-muted" value="<?= htmlspecialchars($user['username'] ?? '') ?>" readonly>
                                     </div>
                                     <div class="form-text x-small italic text-muted mt-2">
-                                        <i class="bi bi-info-circle me-1"></i> Non-modifiable
+                                        <i class="bi bi-lock me-1"></i> Non-modifiable
                                     </div>
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label text-uppercase text-muted fw-bold small">Adresse email</label>
-                                    <input type="email" name="email" class="form-control" value="<?= htmlspecialchars($user['email']) ?>" required>
+                                    <input type="email" name="email" class="form-control" value="<?= htmlspecialchars($user['email'] ?? '') ?>" required>
                                 </div>
                             </div>
 
@@ -104,51 +124,59 @@
                     <div class="card-body text-center p-4">
                         <div class="mb-4 pt-2">
                             <div class="avatar-circle rounded-circle mx-auto">
-                                <?= strtoupper(substr($user['username'], 0, 1)) ?>
+                                <?= strtoupper(substr($user['username'] ?? 'U', 0, 1)) ?>
                             </div>
                         </div>
                         
-                        <h4 class="fw-bold mb-1 text-dark"><?= htmlspecialchars($user['username']) ?></h4>
-                        <p class="text-muted small mb-4"><?= htmlspecialchars($user['email']) ?></p>
+                        <h4 class="fw-bold mb-1 text-dark">
+                            <?= htmlspecialchars(($user['prenom'] ?? '') . ' ' . ($user['nom'] ?? '')) ?>
+                        </h4>
+                        <p class="text-muted small mb-4">@<?= htmlspecialchars($user['username'] ?? '') ?></p>
                         
                         <hr class="w-25 mx-auto my-4 opacity-10">
 
-                        <div class="text-start mb-4">
-                            <div class="mb-4">
-                                <label class="text-uppercase text-muted fw-bold d-block mb-2" style="font-size: 0.65rem; letter-spacing: 0.5px;">Rôle système</label>
-                                <span class="badge bg-white text-primary border border-primary px-3 py-2 rounded-pill small fw-bold">
-                                    <i class="bi bi-shield-shaded me-1"></i> <?= htmlspecialchars($user['role_name'] ?? 'Utilisateur') ?>
-                                </span>
-                            </div>
+                        <!-- Badge Admin qui ne s'affiche QUE si l'utilisateur est admin -->
+                        <?php if($isAdmin): ?>
+                        <div class="text-center mb-4">
+                            <span class="badge bg-danger-subtle text-danger border border-danger px-3 py-2 rounded-pill small fw-bold">
+                                <i class="bi bi-shield-lock-fill me-1"></i> Administrateur
+                            </span>
+                        </div>
+                        <?php endif; ?>
 
-                            <div class="mb-0">
-                                <label class="text-uppercase text-muted fw-bold d-block mb-2" style="font-size: 0.65rem; letter-spacing: 0.5px;">Rattachement administratif</label>
-                                <div class="d-flex align-items-center fw-bold text-dark small">
-                                    <?php if(!empty($user['service_nom'])): ?>
-                                        <div class="bg-light rounded p-2 me-2 text-primary"><i class="bi bi-building"></i></div>
-                                        <?= htmlspecialchars($user['service_nom']) ?>
-                                    <?php else: ?>
-                                        <div class="bg-light rounded p-2 me-2 text-muted"><i class="bi bi-building"></i></div>
-                                        <span class="text-muted italic fw-normal">Aucun service</span>
-                                    <?php endif; ?>
+                        <!-- Affichage des permissions / Droits en capsules -->
+                        <div class="text-center mt-4">
+                            <label class="text-uppercase text-muted fw-bold d-block mb-3" style="font-size: 0.65rem; letter-spacing: 0.5px;">
+                                Vos droits d'accès
+                            </label>
+                            
+                            <?php if (!empty($userPermissionsNames)): ?>
+                                <div class="d-flex flex-wrap justify-content-center gap-2">
+                                    <?php foreach($userPermissionsNames as $permData): ?>
+                                        <span class="badge rounded-pill bg-light text-dark border fw-normal px-3 py-2" title="<?= htmlspecialchars($permData['desc'] ?? '') ?>">
+                                            <i class="bi bi-check2-circle text-success me-1"></i> <?= htmlspecialchars($permData['nom'] ?? 'Droit inconnu') ?>
+                                        </span>
+                                    <?php endforeach; ?>
                                 </div>
-                            </div>
+                            <?php else: ?>
+                                <div class="bg-primary bg-opacity-10 border border-primary border-opacity-25 p-3 rounded-3 text-start">
+                                    <div class="d-flex align-items-center mb-2">
+                                        <i class="bi bi-book text-primary fs-5 me-2"></i>
+                                        <span class="fw-bold text-primary small">Profil Lecteur</span>
+                                    </div>
+                                    <p class="x-small text-dark mb-0 lh-base">
+                                        Vous avez un accès en lecture seule. Vous pouvez consulter et télécharger les documents des séances pour les instances dont vous êtes membre.
+                                    </p>
+                                </div>
+                            <?php endif; ?>
                         </div>
-
-                        <div class="bg-light p-3 rounded text-start mt-4">
-                            <p class="x-small text-muted mb-0 lh-base italic">
-                                <i class="bi bi-info-square-fill me-1 text-primary"></i> 
-                                Vos permissions dépendent de votre rôle. Contactez un administrateur pour toute modification de service ou de permissions.
-                            </p>
-                        </div>
+                        
                     </div>
                 </div>
             </div>
-
         </div>
     </div>
 
     <?php include __DIR__ . '/../layouts/footer.php'; ?>
 </body>
 </html>
-
