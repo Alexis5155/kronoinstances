@@ -115,17 +115,17 @@ $isManager = $canManageInstances || $canManageConvocations || User::can('create_
         <div class="col-md-4">
             <div class="card border-0 shadow-sm h-100 rounded-4 overflow-hidden position-relative stat-card" style="background: linear-gradient(135deg, #ffffff 0%, #e0f2fe 100%);">
                 <div class="position-absolute top-0 end-0 p-3 opacity-10 text-info stat-icon">
-                    <i class="bi bi-file-earmark-text display-1"></i>
+                    <i class="bi bi-folder2-open display-1"></i>
                 </div>
                 <div class="card-body p-4 position-relative z-1">
                     <div class="d-flex align-items-center mb-3">
                         <div class="bg-info bg-opacity-10 text-info p-2 rounded-3 me-3">
-                            <i class="bi bi-folder2-open fs-5"></i>
+                            <i class="bi bi-file-earmark-text fs-5"></i>
                         </div>
-                        <h6 class="text-muted mb-0 fw-bold text-uppercase" style="letter-spacing: 0.5px; font-size: 0.75rem;">Documents</h6>
+                        <h6 class="text-muted mb-0 fw-bold text-uppercase" style="letter-spacing: 0.5px; font-size: 0.75rem;">Espace Documents</h6>
                     </div>
-                    <h2 class="fw-bold mb-0 text-dark display-6"><?= count($derniersDocuments) ?></h2>
-                    <span class="small text-muted fw-medium">ajouts récents disponibles</span>
+                    <h2 class="fw-bold mb-0 text-dark display-6"><?= $nbDocuments ?></h2>
+                    <span class="small text-muted fw-medium">documents disponibles</span>
                 </div>
             </div>
         </div>
@@ -209,35 +209,39 @@ $isManager = $canManageInstances || $canManageConvocations || User::can('create_
                 </div>
             </div>
 
-            <!-- BLOC : DERNIERS DOCUMENTS -->
+            <!-- BLOC : DERNIERS DOCUMENTS DE L'ESPACE PERSONNEL -->
             <div class="card border-0 shadow-sm rounded-4">
-                <div class="card-header bg-white p-4 border-0 pb-0">
-                    <h5 class="card-title fw-bold mb-0"><i class="bi bi-folder2-open me-2 text-info"></i>Derniers documents publiés</h5>
+                <div class="card-header bg-white p-4 border-0 pb-0 d-flex justify-content-between align-items-center">
+                    <h5 class="card-title fw-bold mb-0"><i class="bi bi-folder2-open me-2 text-info"></i>Derniers documents reçus</h5>
+                    <a href="<?= URLROOT ?>/documents" class="btn btn-sm btn-light border text-dark fw-bold rounded-pill px-3 hover-info">
+                        Tout voir <i class="bi bi-arrow-right ms-1"></i>
+                    </a>
                 </div>
                 <div class="card-body p-4 pt-3">
-                    <?php if(empty($derniersDocuments)): ?>
+                    <?php if(empty($mesDocumentsPersonnels)): ?>
                         <div class="text-center py-4 text-muted border rounded-4 bg-light">
-                            <i class="bi bi-files fs-3 d-block mb-2 opacity-25"></i>
-                            <p class="small mb-0">Aucun document récent.</p>
+                            <i class="bi bi-inbox fs-3 d-block mb-2 opacity-25"></i>
+                            <p class="small mb-0">Aucun document dans votre espace.</p>
                         </div>
                     <?php else: ?>
                         <div class="list-group list-group-flush rounded-3 border">
-                            <?php foreach($derniersDocuments as $doc): 
-                                // Détermination de l'icône selon le type
+                            <?php foreach($mesDocumentsPersonnels as $doc): 
+                                // Icône dynamique selon l'extension
+                                $ext = strtolower(pathinfo($doc['chemin_fichier'], PATHINFO_EXTENSION));
                                 $icon = 'bi-file-earmark-text text-secondary';
-                                if($doc['type_doc'] === 'pv') $icon = 'bi-file-earmark-check-fill text-success';
-                                if($doc['type_doc'] === 'convocation') $icon = 'bi-envelope-paper-fill text-warning';
+                                if ($ext === 'pdf') $icon = 'bi-filetype-pdf text-danger';
+                                elseif (in_array($ext, ['doc', 'docx', 'odt'])) $icon = 'bi-filetype-docx text-primary';
+                                elseif (in_array($ext, ['xls', 'xlsx', 'ods'])) $icon = 'bi-filetype-xlsx text-success';
                             ?>
-                            <a href="<?= URLROOT ?>/seances/view/<?= $doc['seance_id'] ?>" class="list-group-item list-group-item-action p-3 d-flex align-items-center">
+                            <a href="<?= URLROOT ?>/<?= htmlspecialchars($doc['chemin_fichier']) ?>" target="_blank" class="list-group-item list-group-item-action p-3 d-flex align-items-center">
                                 <i class="bi <?= $icon ?> fs-4 me-3 opacity-75"></i>
                                 <div class="flex-grow-1">
-                                    <div class="fw-bold text-dark" style="font-size: 0.9rem;"><?= htmlspecialchars($doc['nom']) ?></div>
+                                    <div class="fw-bold text-dark" style="font-size: 0.9rem;"><?= htmlspecialchars($doc['titre']) ?></div>
                                     <div class="text-muted small">
-                                        <span class="badge bg-light text-dark border me-1"><?= ucfirst($doc['type_doc']) ?></span>
-                                        <?= htmlspecialchars($doc['instance_nom']) ?> - Séance du <?= date('d/m/Y', strtotime($doc['date_seance'])) ?>
+                                        <i class="bi bi-person me-1"></i>Transmis par <?= htmlspecialchars($doc['auteur']) ?> • <?= date('d/m/Y', strtotime($doc['created_at'])) ?>
                                     </div>
                                 </div>
-                                <i class="bi bi-chevron-right text-muted opacity-50 ms-2"></i>
+                                <i class="bi bi-download text-primary ms-2 opacity-75"></i>
                             </a>
                             <?php endforeach; ?>
                         </div>
@@ -265,14 +269,34 @@ $isManager = $canManageInstances || $canManageConvocations || User::can('create_
                             </div>
                         </a>
                         
+                        <!-- Raccourci Espace Documents -->
+                        <a href="<?= URLROOT ?>/documents" class="btn btn-light border-0 p-3 rounded-3 text-start d-flex align-items-center shadow-sm shortcut-btn">
+                            <div class="bg-white p-2 rounded text-info me-3 shadow-sm"><i class="bi bi-folder2-open fs-5"></i></div>
+                            <div>
+                                <div class="fw-bold text-dark" style="font-size: 0.9rem;">Mes documents</div>
+                                <div class="small text-muted" style="font-size: 0.75rem;">Consulter mes fichiers reçus</div>
+                            </div>
+                        </a>
+
                         <!-- Raccourci vers le profil -->
                         <a href="<?= URLROOT ?>/compte" class="btn btn-light border-0 p-3 rounded-3 text-start d-flex align-items-center shadow-sm shortcut-btn">
                             <div class="bg-white p-2 rounded text-secondary me-3 shadow-sm"><i class="bi bi-person-badge fs-5"></i></div>
                             <div>
                                 <div class="fw-bold text-dark" style="font-size: 0.9rem;">Mon profil</div>
-                                <div class="small text-muted" style="font-size: 0.75rem;">Sécurité et identifiants</div>
+                                <div class="small text-muted" style="font-size: 0.75rem;">Modifier mes informations personnelles</div>
                             </div>
                         </a>
+
+                        <!-- Raccourci Instances (Conditionnel) -->
+                        <?php if($canManageInstances): ?>
+                        <a href="<?= URLROOT ?>/admin/instances" class="btn btn-light border-0 p-3 rounded-3 text-start d-flex align-items-center shadow-sm shortcut-btn mt-1">
+                            <div class="bg-white p-2 rounded text-success me-3 shadow-sm"><i class="bi bi-diagram-3 fs-5"></i></div>
+                            <div>
+                                <div class="fw-bold text-dark" style="font-size: 0.9rem;">Gérer les instances</div>
+                                <div class="small text-muted" style="font-size: 0.75rem;">Membres et collèges</div>
+                            </div>
+                        </a>
+                        <?php endif; ?>
                         
                         <!-- Raccourci Panel Admin (Conditionnel) -->
                         <?php if($hasAdminAccess): ?>
@@ -280,19 +304,8 @@ $isManager = $canManageInstances || $canManageConvocations || User::can('create_
                         <a href="<?= URLROOT ?>/admin" class="btn bg-dark text-white border-0 p-3 rounded-3 text-start d-flex align-items-center shadow-sm btn-admin-hover">
                             <div class="bg-white bg-opacity-10 p-2 rounded text-white me-3"><i class="bi bi-shield-lock-fill fs-5"></i></div>
                             <div>
-                                <div class="fw-bold" style="font-size: 0.9rem;">Panel Administrateur</div>
+                                <div class="fw-bold" style="font-size: 0.9rem;">Panel administration</div>
                                 <div class="small text-white-50" style="font-size: 0.75rem;">Gestion globale du système</div>
-                            </div>
-                        </a>
-                        <?php endif; ?>
-
-                        <!-- Raccourci Instances (Conditionnel) -->
-                        <?php if($canManageInstances): ?>
-                        <a href="<?= URLROOT ?>/admin/instances" class="btn btn-outline-dark border p-3 rounded-3 text-start d-flex align-items-center mt-1">
-                            <div class="p-1 rounded text-dark me-3"><i class="bi bi-diagram-3 fs-5"></i></div>
-                            <div>
-                                <div class="fw-bold" style="font-size: 0.9rem;">Gérer les instances</div>
-                                <div class="small text-muted" style="font-size: 0.75rem;">Membres et collèges</div>
                             </div>
                         </a>
                         <?php endif; ?>
@@ -314,6 +327,8 @@ $isManager = $canManageInstances || $canManageConvocations || User::can('create_
 
     .hover-primary { transition: all 0.2s; }
     .hover-primary:hover { background-color: #0d6efd !important; color: white !important; }
+    .hover-info { transition: all 0.2s; }
+    .hover-info:hover { background-color: #0dcaf0 !important; color: white !important; }
     
     .shortcut-btn { transition: transform 0.2s, background-color 0.2s; }
     .shortcut-btn:hover { background-color: #f8f9fa !important; transform: translateX(5px); }

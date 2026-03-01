@@ -44,28 +44,32 @@ class Dashboard extends Controller {
         $stmtInstances->execute([$userId]);
         $userInstances = $stmtInstances->fetchAll();
 
-        // Récupérer les 5 derniers documents ajoutés aux séances
-        // Correction de `nom_document` en `nom`
+        // Récupérer les 5 derniers documents PERSONNELS de l'utilisateur
         $stmtDocs = $db->prepare("
-            SELECT d.nom, d.type_doc, s.id as seance_id, s.date_seance, i.nom as instance_nom 
-            FROM documents d
-            JOIN seances s ON d.seance_id = s.id
-            JOIN instances i ON s.instance_id = i.id
-            ORDER BY d.uploaded_at DESC 
+            SELECT id, titre, chemin_fichier, auteur, created_at 
+            FROM user_documents 
+            WHERE user_id = ?
+            ORDER BY created_at DESC 
             LIMIT 5
         ");
-        $stmtDocs->execute();
-        $derniersDocuments = $stmtDocs->fetchAll();
+        $stmtDocs->execute([$userId]);
+        $mesDocumentsPersonnels = $stmtDocs->fetchAll();
+
+        // Obtenir le nombre total de documents pour le widget
+        $stmtCountDocs = $db->prepare("SELECT COUNT(*) FROM user_documents WHERE user_id = ?");
+        $stmtCountDocs->execute([$userId]);
+        $nbDocuments = $stmtCountDocs->fetchColumn();
 
         // Rendu de la vue
         $this->render('dashboard', [
-            'title'               => 'Tableau de bord',
-            'username'            => $_SESSION['username'],
-            'prochainesSeances'   => $prochainesSeances,
-            'nbInstances'         => $nbInstances,
-            'nbSeancesPlanifiees' => $nbSeancesPlanifiees,
-            'userInstances'       => $userInstances,
-            'derniersDocuments'   => $derniersDocuments
+            'title'                  => 'Tableau de bord',
+            'username'               => $_SESSION['username'],
+            'prochainesSeances'      => $prochainesSeances,
+            'nbInstances'            => $nbInstances,
+            'nbSeancesPlanifiees'    => $nbSeancesPlanifiees,
+            'userInstances'          => $userInstances,
+            'mesDocumentsPersonnels' => $mesDocumentsPersonnels,
+            'nbDocuments'            => $nbDocuments
         ]);
     }
 }
