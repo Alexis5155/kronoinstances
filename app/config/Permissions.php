@@ -21,7 +21,7 @@ class Permissions {
         ],
         'manage_convocations' => [
             'nom' => 'Gérer les convocations',
-            'desc' => 'Générer les ODT et gérer l\'envoi des convocations',
+            'desc' => 'Autoriser l\'envoi des convocations aux membres',
             'cat' => 'Gestion métier'
         ],
         'depot_document' => [

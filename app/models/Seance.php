@@ -85,5 +85,4 @@ class Seance {
         $stmt->execute([$instanceId]);
         return $stmt->fetchAll();
     }
-
 }
