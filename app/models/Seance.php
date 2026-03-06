@@ -85,4 +85,9 @@ class Seance {
         $stmt->execute([$instanceId]);
         return $stmt->fetchAll();
     }
+
+    public function updatePvPath($id, $path) {
+        $stmt = $this->db->prepare("UPDATE seances SET proces_verbal_path = ? WHERE id = ?");
+        return $stmt->execute([$path, $id]);
+    }
 }

@@ -475,5 +475,3 @@ function closeLiveToast() {
 
 setInterval(checkNewNotifications, 15000);
 </script>
-</body>
-</html>

@@ -167,29 +167,35 @@ class Seances extends Controller {
             $seanceModel = new Seance();
             $seanceAcienne = $seanceModel->getById($seanceId);
             
+            // Sécurité : On ne peut terminer que si le PV est uploadé
+            if ($statut === 'terminee' && empty($seanceAcienne['proces_verbal_path'])) {
+                setToast("Impossible de terminer la séance : le procès-verbal signé n'a pas été déposé.", "danger");
+                $this->redirect('seances/edit/' . $seanceId);
+                return;
+            }
+
             $seanceModel->updateStatut($seanceId, $statut);
             Log::add('UPDATE_SEANCE_STATUT', "Séance ID $seanceId passée au statut : $statut");
             setToast("Le statut de la séance a été mis à jour.");
 
-            // Si on valide l'ODJ, on vérifie la case à cocher ET les permissions
+            // Si on valide l'ODJ avec envoi de convocations
             if ($statut === 'odj_valide' && isset($_GET['send_convocs']) && $_GET['send_convocs'] == '1') {
-                if (\app\models\User::can('manage_convocations')) {
-                    $this->envoyerConvocations($seanceId);
-                } else {
-                    setToast("Statut mis à jour, mais vous n'avez pas les droits pour envoyer les convocations.", "warning");
-                }
+                $this->sendConvocationsManual($seanceId);
             }
 
-            // Gestion de l'ajournement
+            // Si on clôture la séance (Terminée), on envoie et dépose automatiquement le PV
+            if ($statut === 'terminee' && (!isset($seanceAcienne['pv_envoye']) || $seanceAcienne['pv_envoye'] == 0)) {
+                $this->envoyerPvEtDeposer($seanceId);
+            }
+
+            // Ajournement automatique (votre logique existante)
             if ($statut === 'ajournee') {
-                // Si la séance était déjà à une étape où les convocations ont pu être envoyées
                 $etapesAvancees = ['odj_valide', 'dossier_disponible', 'en_cours'];
                 if (in_array($seanceAcienne['statut'], $etapesAvancees) && \app\models\User::can('manage_convocations')) {
                     $this->notifierAjournement($seanceId);
                 }
             }
 
-            // Si on vient de démarrer la séance, on redirige sur le Live
             if ($statut === 'en_cours') {
                 $this->redirect('seances/live/' . $seanceId);
                 return;
@@ -197,6 +203,7 @@ class Seances extends Controller {
         }
         $this->redirect('seances/edit/' . $seanceId);
     }
+
 
     /**
      * Notifie les membres que la séance est ajournée
@@ -584,12 +591,21 @@ class Seances extends Controller {
             $this->redirect('seances'); return;
         }
 
+        $points = $pointModel->getBySeance($id);
+        
+        // Récupération des votes pour chaque point
+        $votes = [];
+        foreach($points as $pt) {
+            $votes[$pt['id']] = $pointModel->getVotes($pt['id']);
+        }
+
         $this->render('seances/edit', [
-            'title'  => 'Gestion de la séance',
-            'seance' => $seance,
-            'points' => $pointModel->getBySeance($id),
-            'membres' => $instanceModel->getMembres($seance['instance_id']),
-            'documents' => $docModel->getBySeance($id)
+            'title'     => 'Gestion de la séance',
+            'seance'    => $seance,
+            'points'    => $points,
+            'membres'   => $instanceModel->getMembres($seance['instance_id']),
+            'documents' => $docModel->getBySeance($id),
+            'votes'     => $votes // On transmet les votes à la vue
         ]);
     }
 
@@ -637,60 +653,6 @@ class Seances extends Controller {
         } else {
             $this->redirect('seances');
         }
-    }
-
-    /**
-     * UPLOAD DU PROCÈS VERBAL FINAL (Étape Finalisation)
-     */
-    public function uploadPv($seanceId) {
-        if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['pv_file'])) {
-            $file = $_FILES['pv_file'];
-            
-            if ($file['error'] === UPLOAD_ERR_OK && strtolower(pathinfo($file['name'], PATHINFO_EXTENSION)) === 'pdf') {
-                $uploadDir = 'uploads/seances/' . $seanceId . '/';
-                if (!is_dir($uploadDir)) { mkdir($uploadDir, 0777, true); }
-                
-                $safeName = 'PV_FINAL_' . uniqid() . '.pdf';
-                $destPath = $uploadDir . $safeName;
-                
-                if (move_uploaded_file($file['tmp_name'], $destPath)) {
-                    // On met à jour directement la table seances avec le chemin du PV
-                    $db = \app\core\Database::getConnection();
-                    $stmt = $db->prepare("UPDATE seances SET proces_verbal_path = ? WHERE id = ?");
-                    $stmt->execute([$destPath, $seanceId]);
-                    
-                    setToast("Le Procès-Verbal a été rattaché avec succès.");
-                    Log::add('UPLOAD_PV', "Dépôt du PV pour la séance ID: $seanceId");
-                } else {
-                    setToast("Erreur lors de l'enregistrement du PV.", "danger");
-                }
-            } else {
-                setToast("Le fichier doit obligatoirement être au format PDF.", "warning");
-            }
-        }
-        $this->redirect('seances/edit/' . $seanceId);
-    }
-
-    /**
-     * SUPPRESSION DU PROCÈS VERBAL
-     */
-    public function deletePv($seanceId) {
-        $seanceModel = new Seance();
-        $seance = $seanceModel->getById($seanceId);
-        
-        if ($seance && !empty($seance['proces_verbal_path'])) {
-            if (file_exists($seance['proces_verbal_path'])) {
-                unlink($seance['proces_verbal_path']);
-            }
-            
-            $db = \app\core\Database::getConnection();
-            $stmt = $db->prepare("UPDATE seances SET proces_verbal_path = NULL WHERE id = ?");
-            $stmt->execute([$seanceId]);
-            
-            setToast("Le Procès-Verbal a été supprimé.");
-            Log::add('DELETE_PV', "Suppression du PV pour la séance ID: $seanceId");
-        }
-        $this->redirect('seances/edit/' . $seanceId);
     }
 
     /**
@@ -846,4 +808,418 @@ class Seances extends Controller {
         unlink($tempFile);
         exit;
     }
+
+    /**
+     * GÉNÉRATION DU PROCÈS-VERBAL (ODT)
+     */
+    public function generatePv($seanceId) {
+        $seanceModel = new Seance();
+        $pointModel = new PointOdj();
+        $instanceModel = new Instance();
+        $presenceModel = new \app\models\Presence();
+        
+        $seance = $seanceModel->getById($seanceId);
+        if (!$seance) {
+            $this->redirect('seances'); return;
+        }
+
+        $points = $pointModel->getBySeance($seanceId);
+        $membres = $instanceModel->getMembres($seance['instance_id']);
+        $presences = $presenceModel->getBySeance($seanceId);
+
+        // --- 1. PRÉPARATION DU CONTENU DYNAMIQUE ---
+        $xmlContent = "";
+        
+        // Variables de style
+        $pStyle = '<text:p text:style-name="P1">';
+        $h1Style = '<text:p text:style-name="H1">';
+        $h2Style = '<text:p text:style-name="H2">';
+        $boldStyleStart = '<text:span text:style-name="T1">';
+        $boldStyleEnd = '</text:span>';
+        $endP = '</text:p>';
+        
+        // Titre & En-tête
+        $dateObj = new \DateTime($seance['date_seance'] . ' ' . $seance['heure_debut']);
+        $xmlContent .= $h1Style . 'PROCÈS-VERBAL' . $endP;
+        $xmlContent .= $pStyle . $boldStyleStart . htmlspecialchars($seance['instance_nom'], ENT_XML1, 'UTF-8') . $boldStyleEnd . $endP;
+        $xmlContent .= $pStyle . 'Séance du ' . htmlspecialchars($dateObj->format('d/m/Y à H\hi'), ENT_XML1, 'UTF-8') . $endP;
+        if (!empty($seance['lieu'])) {
+            $xmlContent .= $pStyle . 'Lieu : ' . htmlspecialchars($seance['lieu'], ENT_XML1, 'UTF-8') . $endP;
+        }
+        $xmlContent .= '<text:p text:style-name="Standard"/>';
+
+        // Présences
+        $xmlContent .= $h2Style . 'MEMBRES PRÉSENTS' . $endP;
+        
+        $presents = []; $excuses = []; $remplaces = [];
+        
+        foreach ($membres as $m) {
+            $presenceInfo = null;
+            foreach ($presences as $p) {
+                if ($p['membre_id'] == $m['id']) {
+                    $presenceInfo = $p; break;
+                }
+            }
+            
+            $nomComplet = strtoupper($m['nom']) . ' ' . $m['prenom'];
+            $college = ucfirst($m['college']); // Renverra Administration ou Personnel
+            
+            if ($presenceInfo && $presenceInfo['est_present']) {
+                $presents[] = "• $nomComplet ($college)";
+            } elseif ($presenceInfo && !empty($presenceInfo['remplace_par_id'])) {
+                $suppleantNom = '';
+                foreach ($membres as $sup) {
+                    if ($sup['id'] == $presenceInfo['remplace_par_id']) {
+                        $suppleantNom = strtoupper($sup['nom']) . ' ' . $sup['prenom'];
+                        break;
+                    }
+                }
+                $remplaces[] = "• $nomComplet ($college) – représenté(e) par $suppleantNom";
+            } else {
+                $excuses[] = "• $nomComplet ($college)";
+            }
+        }
+        
+        foreach ($presents as $p) { $xmlContent .= $pStyle . htmlspecialchars($p, ENT_XML1, 'UTF-8') . $endP; }
+        
+        if (!empty($remplaces)) {
+            $xmlContent .= '<text:p text:style-name="Standard"/>';
+            $xmlContent .= $h2Style . 'MEMBRES REPRÉSENTÉS' . $endP;
+            foreach ($remplaces as $r) { $xmlContent .= $pStyle . htmlspecialchars($r, ENT_XML1, 'UTF-8') . $endP; }
+        }
+        
+        if (!empty($excuses)) {
+            $xmlContent .= '<text:p text:style-name="Standard"/>';
+            $xmlContent .= $h2Style . 'MEMBRES EXCUSÉS' . $endP;
+            foreach ($excuses as $e) { $xmlContent .= $pStyle . htmlspecialchars($e, ENT_XML1, 'UTF-8') . $endP; }
+        }
+
+        // Saut de page
+        $xmlContent .= '<text:p text:style-name="SautDePage"/>';
+        
+        // Ordre du jour et débats
+        $xmlContent .= $h1Style . 'ORDRE DU JOUR ET DÉBATS' . $endP;
+        
+        foreach ($points as $index => $pt) {
+            $xmlContent .= '<text:p text:style-name="Standard"/>';
+            $xmlContent .= $h2Style . ($index + 1) . '. ' . htmlspecialchars($pt['titre'], ENT_XML1, 'UTF-8') . $endP;
+            
+            if (!empty($pt['debats'])) {
+                $debatsLines = explode("\n", $pt['debats']);
+                foreach ($debatsLines as $line) {
+                    if (trim($line)) {
+                        $xmlContent .= $pStyle . htmlspecialchars(trim($line), ENT_XML1, 'UTF-8') . $endP;
+                    }
+                }
+            } else {
+                $xmlContent .= $pStyle . '<text:span text:style-name="T2">Aucun débat enregistré pour ce point.</text:span>' . $endP;
+            }
+
+            // Gestion des votes
+            if (in_array($pt['type_point'], ['deliberation', 'vote'])) {
+                $xmlContent .= '<text:p text:style-name="Standard"/>';
+                $xmlContent .= $pStyle . $boldStyleStart . 'Les membres de l\'instance sont invités à émettre un avis :' . $boldStyleEnd . $endP;
+                
+                $votes = $pointModel->getVotes($pt['id']);
+                
+                // Analyse par collège (Administration / Personnel)
+                foreach (['administration', 'personnel'] as $college) {
+                    $v = array_filter($votes, fn($vote) => $vote['college'] === $college);
+                    $v = reset($v);
+                    
+                    if ($v) {
+                        $unanimite = ($v['pour'] > 0 && $v['contre'] == 0 && $v['abstention'] == 0);
+                        $nomCollege = ucfirst($college);
+                        
+                        if ($unanimite) {
+                            $xmlContent .= $pStyle . "• Collège $nomCollege : Avis favorable à l'unanimité" . $endP;
+                        } else {
+                            $details = [];
+                            if ($v['pour'] > 0) $details[] = $v['pour'] . ' favorable(s)';
+                            if ($v['contre'] > 0) $details[] = $v['contre'] . ' défavorable(s)';
+                            if ($v['abstention'] > 0) $details[] = $v['abstention'] . ' abstention(s)';
+                            if ($v['refus'] > 0) $details[] = $v['refus'] . ' refus de vote';
+                            
+                            $txtVote = "• Collège $nomCollege : " . implode(', ', $details);
+                            $xmlContent .= $pStyle . htmlspecialchars($txtVote, ENT_XML1, 'UTF-8') . $endP;
+                        }
+                    }
+                }
+            }
+            $xmlContent .= $pStyle . '________________________________________________________' . $endP;
+        }
+
+        // --- 2. CRÉATION DES FICHIERS XML DE L'ODT ---
+        $contentXml = '<?xml version="1.0" encoding="UTF-8"?>
+        <office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0" xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0" xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:meta="urn:oasis:names:tc:opendocument:xmlns:meta:1.0" xmlns:number="urn:oasis:names:tc:opendocument:xmlns:datastyle:1.0" xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0" xmlns:chart="urn:oasis:names:tc:opendocument:xmlns:chart:1.0" xmlns:dr3d="urn:oasis:names:tc:opendocument:xmlns:dr3d:1.0" xmlns:math="http://www.w3.org/1998/Math/MathML" xmlns:form="urn:oasis:names:tc:opendocument:xmlns:form:1.0" xmlns:script="urn:oasis:names:tc:opendocument:xmlns:script:1.0" xmlns:ooo="http://openoffice.org/2004/office" xmlns:ooow="http://openoffice.org/2004/writer" xmlns:oooc="http://openoffice.org/2004/calc" xmlns:dom="http://www.w3.org/2001/xml-events" xmlns:xforms="http://www.w3.org/2002/xforms" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:rpt="http://openoffice.org/2005/report" xmlns:of="urn:oasis:names:tc:opendocument:xmlns:of:1.2" xmlns:xhtml="http://www.w3.org/1999/xhtml" xmlns:grddl="http://www.w3.org/2003/g/data-view#" xmlns:tableooo="http://openoffice.org/2009/table" xmlns:textooo="http://openoffice.org/2013/office" xmlns:field="urn:openoffice:names:experimental:ooo-ms-interop:ext:field:1.0" office:version="1.2">
+            <office:automatic-styles>
+                <style:style style:name="SautDePage" style:family="paragraph" style:parent-style-name="Standard">
+                    <style:paragraph-properties fo:break-before="page"/>
+                </style:style>
+                <style:style style:name="P1" style:family="paragraph" style:parent-style-name="Standard">
+                    <style:text-properties fo:font-size="11pt" style:font-size-asian="11pt" style:font-size-complex="11pt" style:font-name="Arial"/>
+                    <style:paragraph-properties fo:margin-bottom="0.2cm"/>
+                </style:style>
+                <style:style style:name="H1" style:family="paragraph" style:parent-style-name="Standard">
+                    <style:text-properties fo:font-size="14pt" fo:font-weight="bold" style:font-name="Arial"/>
+                    <style:paragraph-properties fo:text-align="center" fo:margin-bottom="0.4cm"/>
+                </style:style>
+                <style:style style:name="H2" style:family="paragraph" style:parent-style-name="Standard">
+                    <style:text-properties fo:font-size="12pt" fo:font-weight="bold" style:text-underline-style="solid" style:font-name="Arial"/>
+                    <style:paragraph-properties fo:margin-bottom="0.3cm"/>
+                </style:style>
+                <style:style style:name="T1" style:family="text">
+                    <style:text-properties fo:font-weight="bold"/>
+                </style:style>
+                <style:style style:name="T2" style:family="text">
+                    <style:text-properties fo:font-style="italic" fo:color="#666666"/>
+                </style:style>
+            </office:automatic-styles>
+            <office:body>
+                <office:text>
+                    ' . $xmlContent . '
+                </office:text>
+            </office:body>
+        </office:document-content>';
+
+        $manifestXml = '<?xml version="1.0" encoding="UTF-8"?>
+        <manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" manifest:version="1.2">
+            <manifest:file-entry manifest:full-path="/" manifest:version="1.2" manifest:media-type="application/vnd.oasis.opendocument.text"/>
+            <manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/>
+        </manifest:manifest>';
+
+        // --- 3. GÉNÉRATION DE L'ARCHIVE ZIP (ODT) ---
+        $tempFile = tempnam(sys_get_temp_dir(), 'PV_') . '.odt';
+        $zip = new \ZipArchive();
+        
+        if ($zip->open($tempFile, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== true) {
+            setToast("Impossible de créer le fichier ODT.", "danger");
+            $this->redirect('seances/edit/' . $seanceId);
+            return;
+        }
+
+        // Ajout des fichiers requis
+        $zip->addFromString('mimetype', 'application/vnd.oasis.opendocument.text');
+        $zip->addFromString('content.xml', $contentXml);
+        $zip->addEmptyDir('META-INF');
+        $zip->addFromString('META-INF/manifest.xml', $manifestXml);
+        $zip->close();
+
+        // --- 4. TÉLÉCHARGEMENT ---
+        while (ob_get_level()) { ob_end_clean(); }
+        clearstatcache(true, $tempFile);
+
+        $safeName = preg_replace('/[^a-zA-Z0-9_\-]/', '_', $seance['instance_nom']);
+        $safeDate = str_replace('/', '', $dateObj->format('Ymd'));
+        $filename = "PV_{$safeName}_{$safeDate}.odt";
+
+        header('Content-Type: application/vnd.oasis.opendocument.text');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Content-Length: ' . filesize($tempFile));
+        header('Cache-Control: no-cache, no-store, must-revalidate');
+        header('Pragma: no-cache');
+        header('Expires: 0');
+        
+        readfile($tempFile);
+        unlink($tempFile);
+        exit;
+    }
+
+    /**
+     * UPLOAD DU PV SIGNÉ
+     */
+    public function uploadPv($seanceId) {
+        if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['pv_signe'])) {
+            $file = $_FILES['pv_signe'];
+            
+            if ($file['error'] === UPLOAD_ERR_OK) {
+                $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+                $allowedExt = ['pdf', 'odt', 'docx'];
+                
+                if (!in_array($ext, $allowedExt)) {
+                    setToast("Format de fichier non autorisé. Utilisez PDF, ODT ou DOCX.", "danger");
+                    $this->redirect('seances/edit/' . $seanceId);
+                    return;
+                }
+                
+                $safeName = 'PV_signe_' . $seanceId . '_' . uniqid() . '.' . $ext;
+                $uploadDir = 'uploads/seances/' . $seanceId . '/';
+                
+                if (!is_dir($uploadDir)) { mkdir($uploadDir, 0777, true); }
+                
+                $destPath = $uploadDir . $safeName;
+                
+                if (move_uploaded_file($file['tmp_name'], $destPath)) {
+                    $seanceModel = new Seance();
+                    $seanceModel->updatePvPath($seanceId, $destPath);
+                    Log::add('UPLOAD_PV', "PV signé uploadé pour la séance ID: $seanceId");
+                    setToast("✅ Procès-verbal signé uploadé avec succès.");
+                } else {
+                    setToast("Erreur lors de l'upload du fichier.", "danger");
+                }
+            } else {
+                setToast("Erreur lors de l'upload : code " . $file['error'], "danger");
+            }
+        }
+        $this->redirect('seances/edit/' . $seanceId);
+    }
+
+    /**
+     * SUPPRESSION DU PV SIGNÉ
+     */
+    public function deletePv($seanceId) {
+        $seanceModel = new Seance();
+        $seance = $seanceModel->getById($seanceId);
+        
+        if ($seance && !empty($seance['proces_verbal_path'])) {
+            if (file_exists($seance['proces_verbal_path'])) {
+                unlink($seance['proces_verbal_path']);
+            }
+            $seanceModel->updatePvPath($seanceId, null);
+            Log::add('DELETE_PV', "PV signé supprimé pour la séance ID: $seanceId");
+            setToast("Procès-verbal signé supprimé.");
+        }
+        $this->redirect('seances/edit/' . $seanceId);
+    }
+
+        /**
+     * NOUVEAU : Retirer ou Rétablir un point
+     */
+    public function toggleRetirePoint($pointId) {
+        $db = \app\core\Database::getConnection();
+        $stmt = $db->prepare("SELECT retire, seance_id FROM points_odj WHERE id = ?");
+        $stmt->execute([$pointId]);
+        $pt = $stmt->fetch();
+        if ($pt) {
+            $newStatus = $pt['retire'] ? 0 : 1;
+            $db->prepare("UPDATE points_odj SET retire = ? WHERE id = ?")->execute([$newStatus, $pointId]);
+            setToast($newStatus ? "Le point a été rayé de l'ordre du jour." : "Le point a été rétabli.");
+            $this->redirect('seances/edit/' . $pt['seance_id']);
+        }
+    }
+
+    /**
+     * NOUVEAU : Envoi manuel des convocations depuis l'encart (Étape 3)
+     */
+    public function sendConvocationsManual($seanceId) {
+        if (!\app\models\User::can('manage_convocations')) {
+            setToast("Vous n'avez pas la permission d'envoyer des convocations.", "danger");
+            $this->redirect('seances/edit/' . $seanceId);
+            return;
+        }
+
+        $db = \app\core\Database::getConnection();
+        $seanceModel = new Seance();
+        $seance = $seanceModel->getById($seanceId);
+
+        if (isset($seance['convocations_envoyees']) && $seance['convocations_envoyees'] == 1) {
+            setToast("Les convocations ont déjà été envoyées.", "warning");
+            $this->redirect('seances/edit/' . $seanceId);
+            return;
+        }
+
+        $stmt = $db->prepare("SELECT chemin_fichier FROM documents WHERE seance_id = ? AND type_doc = 'convocation' LIMIT 1");
+        $stmt->execute([$seanceId]);
+        $doc = $stmt->fetch();
+
+        if (!$doc) {
+            setToast("Impossible d'envoyer : aucun fichier PDF de convocation n'a été déposé.", "danger");
+            $this->redirect('seances/edit/' . $seanceId);
+            return;
+        }
+
+        $membres = $seanceModel->getMembresAvecEmail($seance['instance_id']);
+        $userModel = new \app\models\User();
+        $nbEnvoyes = 0;
+
+        foreach ($membres as $membre) {
+            if (empty($membre['email'])) continue;
+
+            $userMatch = $userModel->findByEmail($membre['email']);
+            if ($userMatch) {
+                // Dépose le document et déclenche la notification applicative !
+                \app\models\UserDocument::deposer(
+                    $userMatch['id'], 
+                    "Convocation - " . $seance['instance_nom'], 
+                    $doc['chemin_fichier'], 
+                    "KronoInstances", 
+                    true 
+                );
+            }
+
+            // Envoi de l'e-mail
+            $dateObj = new \DateTime($seance['date_seance'] . ' ' . $seance['heure_debut']);
+            $subject = "Convocation – " . $seance['instance_nom'];
+            $lien = URLROOT . '/seances/view/' . $seanceId;
+            $body = "<p>Madame, Monsieur,</p><p>Vous êtes convoqué(e) à la séance du <strong>".$dateObj->format('d/m/Y à H\hi')."</strong>.</p><p>Vous pouvez consulter l'ordre du jour et la convocation officielle sur votre espace : <br><a href='$lien'>Accéder à mon espace</a></p>";
+            
+            if (\app\core\Mailer::send($membre['email'], $subject, $body)) {
+                $nbEnvoyes++;
+            }
+        }
+
+        $db->prepare("UPDATE seances SET convocations_envoyees = 1 WHERE id = ?")->execute([$seanceId]);
+        setToast("✅ Convocations envoyées par e-mail et déposées sur l'espace de $nbEnvoyes membre(s).");
+        $this->redirect('seances/edit/' . $seanceId);
+    }
+
+    /**
+     * NOUVEAU : Envoi du PV
+     */
+    private function envoyerPvEtDeposer($seanceId) {
+        $db = \app\core\Database::getConnection();
+        $seanceModel = new Seance();
+        $seance = $seanceModel->getById($seanceId);
+
+        $membres = $seanceModel->getMembresAvecEmail($seance['instance_id']);
+        $userModel = new \app\models\User();
+        $nbEnvoyes = 0;
+
+        foreach ($membres as $membre) {
+            if (empty($membre['email'])) continue;
+
+            $userMatch = $userModel->findByEmail($membre['email']);
+            if ($userMatch) {
+                \app\models\UserDocument::deposer(
+                    $userMatch['id'], 
+                    "Procès-Verbal - " . $seance['instance_nom'], 
+                    $seance['proces_verbal_path'], 
+                    "KronoInstances", 
+                    true
+                );
+            }
+
+            $subject = "Procès-Verbal disponible – " . $seance['instance_nom'];
+            $lien = URLROOT . '/seances/view/' . $seanceId;
+            $body = "<p>Madame, Monsieur,</p><p>Le procès-verbal définitif de la séance du <strong>" . date('d/m/Y', strtotime($seance['date_seance'])) . "</strong> est désormais consultable.</p><p><a href='$lien'>Accéder à mon espace</a></p>";
+            
+            if (\app\core\Mailer::send($membre['email'], $subject, $body)) {
+                $nbEnvoyes++;
+            }
+        }
+        $db->prepare("UPDATE seances SET pv_envoye = 1 WHERE id = ?")->execute([$seanceId]);
+    }
+
+    /**
+     * NOUVEAU : Modification manuelle des votes (Étape 6)
+     */
+    public function saveVotesManual($pointId) {
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $pointModel = new PointOdj();
+            $db = \app\core\Database::getConnection();
+            $stmt = $db->prepare("SELECT seance_id FROM points_odj WHERE id = ?");
+            $stmt->execute([$pointId]);
+            $pt = $stmt->fetch();
+            
+            if ($pt) {
+                $pointModel->saveVotes($pointId, 'administration', $_POST['admin_pour']??0, $_POST['admin_contre']??0, $_POST['admin_abstention']??0, $_POST['admin_refus']??0);
+                $pointModel->saveVotes($pointId, 'personnel', $_POST['pers_pour']??0, $_POST['pers_contre']??0, $_POST['pers_abstention']??0, $_POST['pers_refus']??0);
+                setToast("Les votes ont été mis à jour.");
+                $this->redirect('seances/edit/' . $pt['seance_id']);
+                return;
+            }
+        }
+        $this->redirect('seances');
+    }
+
 }
