@@ -439,7 +439,7 @@ $canEditPointsData = ($isBrouillon || $isDateFixee || $isOdjValide);
                             <div class="d-flex justify-content-between align-items-center mb-3 mt-5">
                                 <label class="form-label small fw-bold text-muted text-uppercase d-flex align-items-center gap-2 mb-0"
                                        style="letter-spacing:0.5px;">
-                                    <i class="bi bi-paperclip text-info"></i> Documents & Annexes
+                                    <i class="bi bi-paperclip text-info"></i> Documents annexés
                                 </label>
                                 <?php if ($canEditPointsData): ?>
                                     <button class="btn btn-sm btn-light border fw-bold text-primary rounded-pill px-3 shadow-sm"
@@ -483,7 +483,7 @@ $canEditPointsData = ($isBrouillon || $isDateFixee || $isOdjValide);
                                             <?php if ($canEditPointsData): ?>
                                             <button type="button"
                                                     onclick="showConfirmModal('<?= URLROOT ?>/seances/deleteDoc/<?= $doc['id'] ?>', 'Supprimer ce document ?')"
-                                                    class="btn btn-sm btn-white text-danger border-0 position-relative z-index-2 shadow-sm rounded-circle d-flex align-items-center justify-content-center"
+                                                    class="btn btn-sm btn-white text-danger border-0 position-relative z-index-2 shadow-sm rounded-circle d-flex align-items-center justify-content-center flex-shrink-0"
                                                     style="width:28px; height:28px; padding:0;" title="Supprimer">
                                                 <i class="bi bi-trash"></i>
                                             </button>
@@ -508,27 +508,12 @@ $canEditPointsData = ($isBrouillon || $isDateFixee || $isOdjValide);
                                         Note interne
                                         <span class="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25 fw-normal"
                                               style="font-size:0.6rem; letter-spacing:0;">
-                                            Non visible des membres
+                                            Visible uniquement par les gestionnaires
                                         </span>
                                     </label>
-                                    <?php if ($canEditPointsData): ?>
                                         <span id="note-save-status-<?= $pt['id'] ?>" class="small" style="opacity:0; transition:opacity 0.2s;"></span>
-                                    <?php endif; ?>
                                 </div>
-
-                                <?php if ($canEditPointsData): ?>
-                                    <textarea class="form-control note-interne-area"
-                                              id="note-interne-<?= $pt['id'] ?>"
-                                              placeholder="Réservé à l'équipe : éléments de contexte, alertes, points de vigilance..."
-                                    ><?= htmlspecialchars($pt['note_interne'] ?? '') ?></textarea>
-                                <?php else: ?>
-                                    <div class="p-3 rounded-3 border"
-                                         style="background:#fffdf0; border-color:#ffe58f !important; font-size:0.9rem; min-height:60px;">
-                                        <?= !empty($pt['note_interne'])
-                                            ? nl2br(htmlspecialchars($pt['note_interne']))
-                                            : '<em class="text-muted">Aucune note interne.</em>' ?>
-                                    </div>
-                                <?php endif; ?>
+                                <textarea class="form-control note-interne-area" id="note-interne-<?= $pt['id'] ?>"><?= htmlspecialchars($pt['note_interne'] ?? '') ?></textarea>
                             </div>
 
                         </div><!-- /accordion-body -->
@@ -811,7 +796,7 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     });
 
-    // ── 4. Quill (exposé des motifs) + Note interne ────────────────
+    // ── 4. Quill (exposé des motifs) ──────────────────────────────────
     <?php if ($canEditPointsData): ?>
     setTimeout(function () {
         if (typeof Quill === 'undefined') { console.error("Quill JS non détecté."); return; }
@@ -819,11 +804,9 @@ document.addEventListener("DOMContentLoaded", function () {
         <?php foreach ($points as $pt): ?>
         <?php if (!isset($pt['retire']) || $pt['retire'] != 1): ?>
         (function (ptId) {
-
-            // — Quill —
             const editorEl = document.getElementById('editor-desc-' + ptId);
             if (editorEl) {
-                const q        = new Quill(editorEl, {
+                const q = new Quill(editorEl, {
                     theme: 'snow',
                     placeholder: 'Rédigez l\'exposé des motifs ici...',
                     modules: { toolbar: [
@@ -858,9 +841,18 @@ document.addEventListener("DOMContentLoaded", function () {
                 q.root.addEventListener('blur', () => { clearTimeout(timeout); saveDesc(); });
                 window.addEventListener('beforeunload', () => { if (isDirty) saveDesc(); });
             }
+        })(<?= $pt['id'] ?>);
+        <?php endif; ?>
+        <?php endforeach; ?>
+    }, 500);
+    <?php endif; ?>
 
-            // — Note interne —
-            const noteEl   = document.getElementById('note-interne-' + ptId);
+    // ── 5. Note interne ──────────────────
+    setTimeout(function () {
+        <?php foreach ($points as $pt): ?>
+        <?php if (!isset($pt['retire']) || $pt['retire'] != 1): ?>
+        (function (ptId) {
+            const noteEl = document.getElementById('note-interne-' + ptId);
             const noteStatus = document.getElementById('note-save-status-' + ptId);
             if (noteEl) {
                 let noteTimeout, noteDirty = false;
@@ -887,13 +879,10 @@ document.addEventListener("DOMContentLoaded", function () {
                 noteEl.addEventListener('blur', () => { clearTimeout(noteTimeout); saveNote(); });
                 window.addEventListener('beforeunload', () => { if (noteDirty) saveNote(); });
             }
-
         })(<?= $pt['id'] ?>);
         <?php endif; ?>
         <?php endforeach; ?>
-
     }, 500);
-    <?php endif; ?>
 
 }); // fin DOMContentLoaded
 
@@ -946,6 +935,9 @@ function savePointMeta() {
                 }
             }
             bootstrap.Modal.getInstance(document.getElementById('modalEditPointMeta')).hide();
+            
+            btn.disabled  = false;
+            btn.innerHTML = '<i class="bi bi-save me-2"></i>Enregistrer';
         } else {
             btn.disabled  = false;
             btn.innerHTML = '<i class="bi bi-save me-2"></i>Enregistrer';

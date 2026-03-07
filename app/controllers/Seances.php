@@ -737,19 +737,6 @@ class Seances extends Controller {
             $note = $data['note_interne'] ?? '';
 
             $db   = \app\core\Database::getConnection();
-            $stmt = $db->prepare("
-                SELECT s.statut FROM points_odj p
-                INNER JOIN seances s ON s.id = p.seance_id
-                WHERE p.id = ?
-            ");
-            $stmt->execute([$pointId]);
-            $row = $stmt->fetch();
-
-            if (!$row || !in_array($row['statut'], ['brouillon', 'date_fixee', 'odj_valide'])) {
-                http_response_code(403);
-                echo json_encode(['error' => 'Non autorisé']);
-                exit;
-            }
 
             $db->prepare("UPDATE points_odj SET note_interne = ? WHERE id = ?")
             ->execute([$note, $pointId]);
