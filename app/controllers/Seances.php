@@ -689,6 +689,154 @@ class Seances extends Controller {
     }
 
     /**
+     * AJAX : Mettre à jour le titre et le type d'un point
+     */
+    public function updatePointMeta($pointId) {
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $data      = json_decode(file_get_contents('php://input'), true);
+            $titre     = trim($data['titre'] ?? '');
+            $typePoint = trim($data['type_point'] ?? 'information');
+
+            $allowed = ['information', 'deliberation', 'vote', 'divers'];
+            if (empty($titre) || !in_array($typePoint, $allowed)) {
+                http_response_code(422);
+                echo json_encode(['error' => 'Données invalides']);
+                exit;
+            }
+
+            // Vérification que la séance est encore éditable
+            $db   = \app\core\Database::getConnection();
+            $stmt = $db->prepare("
+                SELECT s.statut FROM points_odj p
+                INNER JOIN seances s ON s.id = p.seance_id
+                WHERE p.id = ?
+            ");
+            $stmt->execute([$pointId]);
+            $row = $stmt->fetch();
+
+            if (!$row || !in_array($row['statut'], ['brouillon', 'date_fixee', 'odj_valide'])) {
+                http_response_code(403);
+                echo json_encode(['error' => 'Non autorisé']);
+                exit;
+            }
+
+            $pointModel = new PointOdj();
+            $pointModel->updateMeta($pointId, $titre, $typePoint);
+
+            echo json_encode(['success' => true]);
+            exit;
+        }
+    }
+
+    /**
+     * AJAX : Mettre à jour la note interne d'un point
+     */
+    public function updateNoteInterne($pointId) {
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $data = json_decode(file_get_contents('php://input'), true);
+            $note = $data['note_interne'] ?? '';
+
+            $db   = \app\core\Database::getConnection();
+            $stmt = $db->prepare("
+                SELECT s.statut FROM points_odj p
+                INNER JOIN seances s ON s.id = p.seance_id
+                WHERE p.id = ?
+            ");
+            $stmt->execute([$pointId]);
+            $row = $stmt->fetch();
+
+            if (!$row || !in_array($row['statut'], ['brouillon', 'date_fixee', 'odj_valide'])) {
+                http_response_code(403);
+                echo json_encode(['error' => 'Non autorisé']);
+                exit;
+            }
+
+            $db->prepare("UPDATE points_odj SET note_interne = ? WHERE id = ?")
+            ->execute([$note, $pointId]);
+
+            echo json_encode(['success' => true]);
+            exit;
+        }
+    }
+
+    /**
+     * AJAX : Poser un verrou collaboratif sur un point
+     */
+    public function lockPoint($pointId) {
+        $userId = $_SESSION['user_id'];
+        $db     = \app\core\Database::getConnection();
+
+        // Récupération du nom de l'utilisateur connecté
+        $stmt = $db->prepare("SELECT prenom, nom FROM users WHERE id = ?");
+        $stmt->execute([$userId]);
+        $user     = $stmt->fetch();
+        $userName = trim(($user['prenom'] ?? '') . ' ' . ($user['nom'] ?? ''))
+                    ?: 'Utilisateur #' . $userId;
+
+        // Nettoyage des verrous expirés (> 60 secondes)
+        $db->prepare("DELETE FROM point_locks WHERE locked_at < DATE_SUB(NOW(), INTERVAL 60 SECOND)")
+        ->execute();
+
+        // Pose ou rafraîchit le verrou
+        $db->prepare("
+            INSERT INTO point_locks (point_odj_id, user_id, user_name, locked_at)
+            VALUES (?, ?, ?, NOW())
+            ON DUPLICATE KEY UPDATE
+                user_id   = ?,
+                user_name = ?,
+                locked_at = NOW()
+        ")->execute([$pointId, $userId, $userName, $userId, $userName]);
+
+        echo json_encode(['success' => true]);
+        exit;
+    }
+
+    /**
+     * AJAX : Libérer le verrou d'un point
+     */
+    public function unlockPoint($pointId) {
+        $userId = $_SESSION['user_id'];
+        $db     = \app\core\Database::getConnection();
+
+        $db->prepare("DELETE FROM point_locks WHERE point_odj_id = ? AND user_id = ?")
+        ->execute([$pointId, $userId]);
+
+        echo json_encode(['success' => true]);
+        exit;
+    }
+
+    /**
+     * AJAX : Retourner les verrous actifs d'une séance (polling frontend)
+     */
+    public function checkLocks($seanceId) {
+        $db = \app\core\Database::getConnection();
+
+        // Nettoyage des verrous expirés au passage
+        $db->prepare("DELETE FROM point_locks WHERE locked_at < DATE_SUB(NOW(), INTERVAL 60 SECOND)")
+        ->execute();
+
+        $stmt = $db->prepare("
+            SELECT pl.point_odj_id, pl.user_id, pl.user_name
+            FROM point_locks pl
+            INNER JOIN points_odj po ON po.id = pl.point_odj_id
+            WHERE po.seance_id = ?
+        ");
+        $stmt->execute([$seanceId]);
+
+        $locks = [];
+        foreach ($stmt->fetchAll(\PDO::FETCH_ASSOC) as $row) {
+            $locks[$row['point_odj_id']] = [
+                'user_id'   => $row['user_id'],
+                'user_name' => $row['user_name'],
+            ];
+        }
+
+        header('Content-Type: application/json');
+        echo json_encode($locks);
+        exit;
+    }
+
+    /**
      * Génère la convocation pré-remplie au format ODT de façon sécurisée
      */
     public function generateConvocation($seanceId) {
@@ -1201,7 +1349,7 @@ class Seances extends Controller {
     }
 
     /**
-     * NOUVEAU : Modification manuelle des votes (Étape 6)
+     * Modification manuelle des votes (Étape 6)
      */
     public function saveVotesManual($pointId) {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -1221,5 +1369,4 @@ class Seances extends Controller {
         }
         $this->redirect('seances');
     }
-
 }
