@@ -11,6 +11,15 @@ class Log {
         $this->db = Database::getConnection();
     }
 
+    /**
+     * Enregistre une action dans les logs
+     * @param string $action L'action effectuée (ex: "Création de séance")
+     * @param string $details Détails supplémentaires sur l'action (ex: "Séance ID: 123")
+     * @param int|null $target_id ID de l'entité ciblée (ex: ID de la séance)
+     * @param string|null $target_type Type de l'entité ciblée (ex: "seance")
+     * @param mixed|null $old_value Valeur avant modification
+     * @param mixed|null $new_value Valeur après modification
+     */
     public static function add($action, $details = '', $target_id = null, $target_type = null, $old_value = null, $new_value = null) {
         $db = Database::getConnection();
         $sql = "INSERT INTO logs (user_id, action, target_id, target_type, old_value, new_value, details, ip_address) 

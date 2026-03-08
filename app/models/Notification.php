@@ -10,6 +10,13 @@ class Notification {
         $this->db = Database::getConnection();
     }
 
+    /**
+     * Ajoute une notification pour un utilisateur
+     * @param int $userId ID de l'utilisateur destinataire
+     * @param string $type Type de notification (ex: "info", "success", "warning", "error")
+     * @param string $message Contenu de la notification
+     * @param string|null $link URL facultative associée à la notification
+    */
     public static function add($userId, $type, $message, $link = null) {
         $db = Database::getConnection();
         $stmt = $db->prepare("INSERT INTO notifications (user_id, type, message, link) VALUES (?, ?, ?, ?)");

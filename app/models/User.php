@@ -67,6 +67,17 @@ class User {
         }
     }
 
+    /**
+     * Vérifie si l'utilisateur a la permission "manage_system" qui lui confère tous les droits
+     * @param int $userId
+     * @return bool
+     */
+    public static function isSuperAdmin($userId) {
+        $stmt = Database::getConnection()->prepare("SELECT COUNT(*) FROM user_permissions WHERE user_id = ? AND permission_slug = 'manage_system'");
+        $stmt->execute([$userId]);
+        return $stmt->fetchColumn() > 0;
+    }
+
     // ==========================================
     // LECTURE & PAGINATION
     // ==========================================
