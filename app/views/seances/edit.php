@@ -470,6 +470,44 @@ $progressPct = $isAjournee ? 0 : ($currentStatusIndex / (count($steps) - 1));
     </div>
 </div>
 
+<!-- Modale : Confirmation -->
+<div class="modal fade" id="modalConfirmGlobal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <div class="modal-body p-4 text-center">
+                <!-- Icône d'avertissement -->
+                <div class="text-danger mb-3">
+                    <i class="bi bi-exclamation-circle-fill" style="font-size: 3rem;"></i>
+                </div>
+                
+                <h5 class="fw-bold text-dark mb-3">Confirmation</h5>
+                <p id="modalConfirmMessage" class="text-muted mb-4">Êtes-vous sûr de vouloir effectuer cette action ?</p>
+                
+                <div class="d-flex justify-content-center gap-2">
+                    <button type="button" class="btn btn-light fw-bold px-4 rounded-pill" data-bs-dismiss="modal">Annuler</button>
+                    <!-- Ce lien servira de bouton de confirmation -->
+                    <a href="#" id="modalConfirmBtn" class="btn btn-danger fw-bold px-4 shadow-sm rounded-pill">Confirmer</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+//Affiche la modale de confirmation Bootstrap
+function showConfirmModal(url, message) {
+    // Met à jour le texte de la modale
+    document.getElementById('modalConfirmMessage').textContent = message;
+    
+    // Met à jour le lien du bouton de confirmation
+    document.getElementById('modalConfirmBtn').href = url;
+    
+    // Affiche la modale
+    const confirmModal = new bootstrap.Modal(document.getElementById('modalConfirmGlobal'));
+    confirmModal.show();
+}
+</script>
 <script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+
 <?php require_once __DIR__ . '/../layouts/footer.php'; ?>

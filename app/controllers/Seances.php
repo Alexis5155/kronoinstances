@@ -7,9 +7,9 @@ use app\models\Instance;
 use app\models\PointOdj;
 use app\models\Presence;
 use app\models\Document;
+use app\models\User;
 use app\models\UserDocument;
 use app\models\Notification;
-use app\models\User;
 use app\core\Mailer;
 use app\models\Log;
 use DateTime;
@@ -157,6 +157,7 @@ class Seances extends Controller {
             if (in_array($seanceActuelle['statut'], $etapesAvancees) && User::can('manage_convocations')) {
                 $this->notifierAjournement($seanceId);
             }
+            \app\core\Database::getConnection()->prepare("UPDATE seances SET convocations_envoyees = 0 WHERE id = ?")->execute([$seanceId]);
         }
 
         // Action auto : Envoi du PV final lors de la clôture
@@ -214,10 +215,24 @@ class Seances extends Controller {
         $db = \app\core\Database::getConnection();
         $stmt = $db->prepare("SELECT 1 FROM instance_managers WHERE instance_id = ? AND user_id = ?");
         $stmt->execute([$seance['instance_id'], $_SESSION['user_id']]);
-
+        
         if (!$stmt->fetch() && !User::isSuperAdmin($_SESSION['user_id'])) {
             setToast("Accès refusé : vous n'êtes pas gestionnaire de cette instance.", "danger");
             $this->redirect('seances');
+            return;
+        }
+
+        // Traitement du formulaire de mise à jour des détails logistiques
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $date = $_POST['date_seance'] ?? $seance['date_seance'];
+            $heure = $_POST['heure_debut'] ?? $seance['heure_debut'];
+            $lieu = trim($_POST['lieu'] ?? $seance['lieu']);
+
+            $db->prepare("UPDATE seances SET date_seance = ?, heure_debut = ?, lieu = ? WHERE id = ?")
+               ->execute([$date, $heure, $lieu, $id]);
+            
+            setToast("Détails de la séance mis à jour.", "success");
+            $this->redirect('seances/edit/' . $id);
             return;
         }
 
@@ -279,48 +294,6 @@ class Seances extends Controller {
     /* =========================================================================
        MESSAGERIE ET NOTIFICATIONS
        ========================================================================= */
-
-    /**
-     * Générateur de gabarit e-mail KronoInstances
-     */
-    private function getEmailTemplate($title, $content) {
-        return "
-        <!DOCTYPE html>
-        <html lang='fr'>
-        <head><meta charset='UTF-8'></head>
-        <body style='margin:0; padding:0; background-color:#f4f6f8; font-family: Arial, sans-serif;'>
-            <table width='100%' cellpadding='0' cellspacing='0' style='background-color:#f4f6f8; padding: 30px 0;'>
-                <tr>
-                    <td align='center'>
-                        <table width='600' cellpadding='0' cellspacing='0' style='background-color:#ffffff; border-radius: 8px; overflow:hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.08);'>
-                            <!-- En-tête bleu -->
-                            <tr>
-                                <td style='background: linear-gradient(135deg, #0d6efd, #0a58ca); padding: 25px 40px; text-align: center;'>
-                                    <h1 style='color: #ffffff; margin:0; font-size: 20px; font-weight: bold; letter-spacing: 1px;'>{$title}</h1>
-                                </td>
-                            </tr>
-                            <!-- Contenu -->
-                            <tr>
-                                <td style='padding: 35px 40px;'>
-                                    {$content}
-                                </td>
-                            </tr>
-                            <!-- Pied de page -->
-                            <tr>
-                                <td style='background-color: #f8f9fa; padding: 18px 40px; text-align: center; border-top: 1px solid #e9ecef;'>
-                                    <p style='color: #aaaaaa; font-size: 12px; margin: 0;'>
-                                        KronoInstances &bull; Message automatique généré par la plateforme.<br>
-                                        Merci de ne pas répondre directement à cet e-mail.
-                                    </p>
-                                </td>
-                            </tr>
-                        </table>
-                    </td>
-                </tr>
-            </table>
-        </body>
-        </html>";
-    }
 
     /**
      * Diffuse officiellement la convocation et l'ODJ (via email et dépôt espace personnel)
@@ -418,8 +391,6 @@ class Seances extends Controller {
                 </table>
             ";
 
-            $bodyHtml = $this->getEmailTemplate("CONVOCATION", $corpsMail);
-
             // Dépôt dans le coffre-fort si l'utilisateur existe
             $userMatch = $userModel->findByEmail($membre['email']);
             if ($userMatch) {
@@ -438,7 +409,7 @@ class Seances extends Controller {
                 );
             }
 
-            if (Mailer::send($membre['email'], $subject, $bodyHtml)) {
+            if (Mailer::send($membre['email'], $subject, $corpsMail)) {
                 $nbEnvoyes++;
             }
         }
@@ -464,7 +435,7 @@ class Seances extends Controller {
 
         $dateObj = new DateTime($seance['date_seance'] . ' ' . $seance['heure_debut']);
         $dateFormatee = $dateObj->format('d/m/Y');
-        $subject = "REPORT • " . $seance['instance_nom'] . " du " . $dateFormatee;
+        $subject = "SÉANCE AJOURNÉE • " . $seance['instance_nom'] . " du " . $dateFormatee;
 
         foreach ($membres as $membre) {
             if (empty($membre['email'])) continue;
@@ -482,8 +453,7 @@ class Seances extends Controller {
                 <p style='color: #555; font-size: 14px;'>Une nouvelle convocation vous sera adressée ultérieurement dès qu'une date de report aura été fixée.</p>
             ";
 
-            $bodyHtml = $this->getEmailTemplate("SÉANCE AJOURNÉE", $corpsMail);
-            Mailer::send($membre['email'], $subject, $bodyHtml);
+            Mailer::send($membre['email'], $subject, $corpsMail);
         }
     }
 
@@ -498,7 +468,7 @@ class Seances extends Controller {
         
         $nbEnvoyes = 0;
         $dateStr = date('d/m/Y', strtotime($seance['date_seance']));
-        $subject = "Procès-Verbal disponible • " . $seance['instance_nom'];
+        $subject = "PROCÈS-VERBAL disponible • " . $seance['instance_nom'];
         $lien = URLROOT . '/seances/view/' . $seanceId;
 
         foreach ($membres as $membre) {
@@ -527,9 +497,7 @@ class Seances extends Controller {
                 </table>
             ";
 
-            $bodyHtml = $this->getEmailTemplate("PROCÈS-VERBAL", $corpsMail);
-
-            if (Mailer::send($membre['email'], $subject, $bodyHtml)) {
+            if (Mailer::send($membre['email'], $subject, $corpsMail)) {
                 $nbEnvoyes++;
             }
         }

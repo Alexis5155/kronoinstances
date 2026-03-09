@@ -416,7 +416,7 @@ $canEditPointsData = ($isBrouillon || $isDateFixee || $isOdjValide);
                                 <?php if ($canAddPoints && !$isRetire): ?>
                                     <li>
                                         <a class="dropdown-item text-danger py-2 fw-medium" href="#"
-                                           onclick="showConfirmModal('<?= URLROOT ?>/seances/deletePoint/<?= $pt['id'] ?>', 'Supprimer définitivement ce point de l\'ODJ ?')">
+                                           onclick="showConfirmModal('<?= URLROOT ?>/seances/deletePoint/<?= $pt['id'] ?>', 'Supprimer définitivement ce point de l\'ordre du jour ?')">
                                             <i class="bi bi-trash me-2"></i>Supprimer
                                         </a>
                                     </li>
@@ -1206,12 +1206,16 @@ function openEditMetaModal(el) {
 
 function savePointMeta() {
     const pointId = document.getElementById('editMeta_pointId').value;
-    const titre   = document.getElementById('editMeta_titre').value.trim();
-    const type    = document.getElementById('editMeta_type').value;
-    const titreInput = document.getElementById('editMeta_titre');
+    const titre = document.getElementById('editMeta_titre').value.trim();
+    const type = document.getElementById('editMeta_type').value;
 
+    const titreInput = document.getElementById('editMeta_titre');
     titreInput.classList.remove('is-invalid');
-    if (!titre) { titreInput.classList.add('is-invalid'); return; }
+
+    if (!titre) {
+        titreInput.classList.add('is-invalid');
+        return;
+    }
 
     const btn = document.querySelector('#modalEditPointMeta .btn-primary');
     btn.disabled = true;
@@ -1220,13 +1224,14 @@ function savePointMeta() {
     fetch(URLROOT + '/seances/updatePointMeta/' + pointId, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ titre, type_point: type })
+        body: JSON.stringify({ titre: titre, type_point: type })
     })
     .then(r => r.json())
     .then(data => {
         if (data.success) {
             const item = document.getElementById('point-item-' + pointId);
             if (item) {
+                // Mise à jour de l'affichage
                 const titleSpan = item.querySelector('.point-title-display');
                 if (titleSpan) {
                     titleSpan.textContent = titre;
@@ -1237,17 +1242,28 @@ function savePointMeta() {
                 const config = TYPE_CONFIG[type] || TYPE_CONFIG['information'];
                 if (badge) {
                     badge.className = 'badge type-badge ' + config.cls + ' border border-opacity-25 px-2 py-1';
-                    badge.innerHTML = `<i class="bi ${config.icon} me-1"></i>${config.label}`;
+                    badge.innerHTML = '<i class="bi ' + config.icon + ' me-1"></i>' + config.label;
+                }
+
+                // NOUVEAU : MISE À JOUR DES DATA-ATTRIBUTS DU BOUTON POUR LA PROCHAINE OUVERTURE
+                const editBtn = item.querySelector('a.dropdown-item[onclick^="openEditMetaModal"]');
+                if (editBtn) {
+                    editBtn.setAttribute('data-point-titre', titre);
+                    editBtn.setAttribute('data-point-type', type);
                 }
             }
+
             bootstrap.Modal.getInstance(document.getElementById('modalEditPointMeta')).hide();
-            btn.disabled = false; btn.innerHTML = '<i class="bi bi-save me-2"></i>Enregistrer';
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-save me-2"></i>Enregistrer';
         } else {
-            btn.disabled = false; btn.innerHTML = '<i class="bi bi-save me-2"></i>Enregistrer';
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-save me-2"></i>Enregistrer';
         }
     })
     .catch(() => {
-        btn.disabled = false; btn.innerHTML = '<i class="bi bi-save me-2"></i>Enregistrer';
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-save me-2"></i>Enregistrer';
     });
 }
 </script>
