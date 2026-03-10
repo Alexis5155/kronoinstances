@@ -14,7 +14,14 @@ $pageUrl = function(int $p) use ($baseUrl) { return $baseUrl . '?page=' . max(1,
             <a href="<?= URLROOT ?>/admin" class="text-decoration-none small text-primary fw-bold">
                 <i class="bi bi-arrow-left me-1"></i> Administration
             </a>
-            <h2 class="fw-bold mt-2 mb-0">Gestion des utilisateurs</h2>
+            <h2 class="fw-bold mb-0 text-dark">Comptes & Permissions
+                <?php if ($count_pending > 0): ?>
+                    <span class="badge bg-warning text-dark ms-2 rounded-pill shadow-sm" style="font-size:0.75rem;">
+                        <?= $count_pending ?> en attente
+                    </span>
+                <?php endif; ?>
+            </h2>
+            <p class="text-muted small mb-0">Gérez les utilisateurs, leurs rôles et permissions.</p>
         </div>
         <a href="<?= URLROOT ?>/admin/userAdd" class="btn btn-primary fw-bold shadow-sm px-4">
             <i class="bi bi-person-plus-fill me-2"></i>Nouvel utilisateur

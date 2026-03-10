@@ -7,6 +7,7 @@ use app\models\Instance;
 use app\models\Log;
 use app\models\Parametre;
 use app\config\Permissions;
+use app\core\Database;
 
 class Admin extends Controller
 {
@@ -125,7 +126,7 @@ class Admin extends Controller
         $paramModel = new Parametre();
         $section = $_GET['section'] ?? 'general';
 
-        $allowed_sections = ['general', 'smtp', 'system', 'update'];
+        $allowed_sections = ['general', 'smtp', 'connexion', 'system', 'update'];
         if (!in_array($section, $allowed_sections)) {
             $section = 'general';
         }
@@ -327,6 +328,10 @@ class Admin extends Controller
     public function users() {
         $this->requirePerm('manage_users');
         $userModel = new User();
+        $db = Database::getConnection();
+        $stmtPending = $db->query("SELECT COUNT(*) FROM users WHERE status = 'pending_approval'");
+        $count_pending = $stmtPending->fetchColumn();
+
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_user'])) {
             $this->checkCsrf();

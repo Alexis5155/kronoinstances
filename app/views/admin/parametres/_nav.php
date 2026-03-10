@@ -2,33 +2,76 @@
 use app\models\User;
 $section = $section ?? 'general';
 ?>
+
 <div class="col-lg-3">
-    <div class="card border-0 shadow-sm sticky-top" style="top: 20px; border-radius: 15px;">
+    <div class="card border-0 shadow-sm rounded-4 overflow-hidden sticky-top" style="top: 20px;">
         <div class="card-body p-3">
-            <nav class="nav flex-column nav-pills custom-v-pills">
-                
+
+            <nav class="nav flex-column gap-1">
+
                 <?php if(User::can('manage_system')): ?>
-                <div class="nav-section-title">Général</div>
-                
-                <a class="nav-link <?= $section === 'general' ? 'active' : '' ?>" href="<?= URLROOT ?>/admin/parametres?section=general">
-                    <i class="bi bi-building"></i> Identité
+
+                <!-- Général -->
+                <div class="px-3 pt-2 pb-1">
+                    <span class="text-muted fw-bold text-uppercase" style="font-size:0.65rem; letter-spacing:1px;">Général</span>
+                </div>
+
+                <a class="nav-link d-flex align-items-center rounded-3 px-3 py-2 fw-medium <?= $section === 'general' ? 'bg-primary bg-opacity-10 text-primary' : 'text-dark' ?>"
+                   href="<?= URLROOT ?>/admin/parametres?section=general"
+                   style="transition: all 0.2s ease; <?= $section === 'general' ? 'border: 1px solid rgba(13,110,253,0.2);' : 'border: 1px solid transparent;' ?>">
+                    <div class="me-3 d-flex align-items-center justify-content-center rounded-3 <?= $section === 'general' ? 'bg-primary bg-opacity-10 text-primary' : 'bg-light text-muted' ?>" style="width:32px;height:32px;">
+                        <i class="bi bi-building"></i>
+                    </div>
+                    Identité
                 </a>
 
-                <a class="nav-link <?= $section === 'smtp' ? 'active' : '' ?>" href="<?= URLROOT ?>/admin/parametres?section=smtp">
-                    <i class="bi bi-envelope-at"></i> E-mail
+                <!-- Technique -->
+                <div class="px-3 pt-3 pb-1">
+                    <span class="text-muted fw-bold text-uppercase" style="font-size:0.65rem; letter-spacing:1px;">Système</span>
+                </div>
+
+                <a class="nav-link d-flex align-items-center rounded-3 px-3 py-2 fw-medium <?= $section === 'smtp' ? 'bg-primary bg-opacity-10 text-primary' : 'text-dark' ?>"
+                   href="<?= URLROOT ?>/admin/parametres?section=smtp"
+                   style="transition: all 0.2s ease; <?= $section === 'smtp' ? 'border: 1px solid rgba(13,110,253,0.2);' : 'border: 1px solid transparent;' ?>">
+                    <div class="me-3 d-flex align-items-center justify-content-center rounded-3 <?= $section === 'smtp' ? 'bg-primary bg-opacity-10 text-primary' : 'bg-light text-muted' ?>" style="width:32px;height:32px;">
+                        <i class="bi bi-envelope-at"></i>
+                    </div>
+                    E-mail (SMTP)
                 </a>
-                
-                <div class="nav-section-title mt-4">Technique & Serveur</div>
-                
-                <a class="nav-link <?= $section === 'system' ? 'active' : '' ?>" href="<?= URLROOT ?>/admin/parametres?section=system">
-                    <i class="bi bi-database-gear"></i> Base de données
+
+                <!-- Après le lien "E-mail (SMTP)" -->
+                <a class="nav-link d-flex align-items-center rounded-3 px-3 py-2 fw-medium <?= $section === 'connexion' ? 'bg-primary bg-opacity-10 text-primary' : 'text-dark' ?>"
+                href="<?= URLROOT ?>/admin/parametres?section=connexion"
+                style="transition: all 0.2s ease; <?= $section === 'connexion' ? 'border: 1px solid rgba(13,110,253,0.2);' : 'border: 1px solid transparent;' ?>">
+                    <div class="me-3 d-flex align-items-center justify-content-center rounded-3 <?= $section === 'connexion' ? 'bg-primary bg-opacity-10 text-primary' : 'bg-light text-muted' ?>" style="width:32px;height:32px;">
+                        <i class="bi bi-door-open"></i>
+                    </div>
+                    Connexion
                 </a>
-                
-                <div class="nav-section-title mt-4">Déploiement</div>
-                
-                <a class="nav-link <?= $section === 'update' ? 'active' : '' ?>" href="<?= URLROOT ?>/admin/parametres?section=update">
-                    <i class="bi bi-cloud-arrow-down"></i> Mise à jour
+
+                <a class="nav-link d-flex align-items-center rounded-3 px-3 py-2 fw-medium <?= $section === 'system' ? 'bg-primary bg-opacity-10 text-primary' : 'text-dark' ?>"
+                   href="<?= URLROOT ?>/admin/parametres?section=system"
+                   style="transition: all 0.2s ease; <?= $section === 'system' ? 'border: 1px solid rgba(13,110,253,0.2);' : 'border: 1px solid transparent;' ?>">
+                    <div class="me-3 d-flex align-items-center justify-content-center rounded-3 <?= $section === 'system' ? 'bg-primary bg-opacity-10 text-primary' : 'bg-light text-muted' ?>" style="width:32px;height:32px;">
+                        <i class="bi bi-database-gear"></i>
+                    </div>
+                    Base de données
                 </a>
+
+                <!-- Déploiement -->
+                <div class="px-3 pt-3 pb-1">
+                    <span class="text-muted fw-bold text-uppercase" style="font-size:0.65rem; letter-spacing:1px;">Déploiement</span>
+                </div>
+
+                <a class="nav-link d-flex align-items-center rounded-3 px-3 py-2 fw-medium <?= $section === 'update' ? 'bg-primary bg-opacity-10 text-primary' : 'text-dark' ?>"
+                   href="<?= URLROOT ?>/admin/parametres?section=update"
+                   style="transition: all 0.2s ease; <?= $section === 'update' ? 'border: 1px solid rgba(13,110,253,0.2);' : 'border: 1px solid transparent;' ?>">
+                    <div class="me-3 d-flex align-items-center justify-content-center rounded-3 <?= $section === 'update' ? 'bg-primary bg-opacity-10 text-primary' : 'bg-light text-muted' ?>" style="width:32px;height:32px;">
+                        <i class="bi bi-cloud-arrow-down"></i>
+                    </div>
+                    Mise à jour
+                </a>
+
                 <?php endif; ?>
 
             </nav>
@@ -37,51 +80,7 @@ $section = $section ?? 'general';
 </div>
 
 <style>
-/* Titres des sections dans le menu */
-.nav-section-title {
-    font-size: 0.65rem;
-    font-weight: 800;
-    text-transform: uppercase;
-    color: #adb5bd;
-    letter-spacing: 1px;
-    margin-bottom: 8px;
-    padding-left: 12px;
-}
-
-/* Style de base des boutons (Agrandis, arrondis) */
-.custom-v-pills .nav-link { 
-    transition: all 0.2s ease;
-    border-radius: 12px; /* Coins bien arrondis */
-    padding: 12px 18px; /* Boutons plus grands */
-    margin-bottom: 6px;
-    color: #495057; /* Texte gris foncé par défaut */
-    font-weight: 500;
-    border: 1px solid transparent; /* Bordure invisible par défaut pour garder la taille */
-    display: flex;
-    align-items: center;
-}
-
-.custom-v-pills .nav-link i {
-    margin-right: 12px;
-    font-size: 1.1rem;
-    opacity: 0.7; /* Icône légèrement grisée par défaut */
-}
-
-/* Survol des boutons inactifs */
-.custom-v-pills .nav-link:hover:not(.active) { 
-    background-color: #f8f9fa; 
-    color: #212529;
-}
-
-/* Style spécifique du bouton ACTIF (Inspiré de ta photo) */
-.custom-v-pills .nav-link.active {
-    background-color: #f0f4ff !important; /* Bleu très pâle */
-    color: #0d6efd !important; /* Texte bleu vif */
-    font-weight: 600; /* Texte légèrement plus gras */
-    border: 1px solid #b6d4fe !important; /* Bordure fine bleu clair */
-}
-
-.custom-v-pills .nav-link.active i {
-    opacity: 1; /* L'icône prend la couleur bleu vif complète */
+.nav-link:hover:not(.bg-primary) {
+    background-color: #f8f9fa !important;
 }
 </style>

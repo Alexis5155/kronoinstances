@@ -42,7 +42,7 @@
         </div>
         <div>
             <a href="<?= URLROOT ?>/dashboard" class="btn btn-light fw-bold shadow-sm px-4 rounded-pill border">
-                <i class="bi bi-arrow-left me-2"></i> Retour
+                <i class="bi bi-arrow-left me-2"></i> Dashboard
             </a>
         </div>
     </div>
@@ -117,7 +117,14 @@
         <div class="col">
             <div class="card card-tool bg-white">
                 <div class="card-body p-4 d-flex flex-column">
-                    <div class="icon-box-admin bg-primary bg-opacity-10 text-primary"><i class="bi bi-person-gear"></i></div>
+                    <div class="icon-box-admin bg-primary bg-opacity-10 text-primary position-relative">
+                        <i class="bi bi-person-gear"></i>
+                        <?php if (!empty($count_pending) && $count_pending > 0): ?>
+                            <span class="position-absolute top-0 end-0 translate-middle badge rounded-pill bg-warning text-dark" style="font-size:0.65rem;">
+                                <?= $count_pending ?>
+                            </span>
+                        <?php endif; ?>
+                    </div>
                     <h5 class="fw-bold text-dark">Comptes & Permissions</h5>
                     <p class="text-muted small flex-grow-1">Créer des comptes pour les agents, modifier les identifiants et attribuer les droits d'administration.</p>
                     <a href="<?= URLROOT ?>/admin/users" class="btn btn-light border w-100 fw-bold text-primary rounded-pill mt-2">Gérer les accès</a>
