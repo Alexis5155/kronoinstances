@@ -106,9 +106,9 @@ class User {
     // GESTION (CRUD)
     // ==========================================
 
-    public function create($username, $password, $email, $prenom = null, $nom = null) {
-        $stmt = $this->db->prepare("INSERT INTO users (username, password, email, prenom, nom) VALUES (?, ?, ?, ?, ?)");
-        if ($stmt->execute([$username, $password, $email, $prenom, $nom])) {
+    public function create($username, $password, $email, $prenom, $nom, $status = 'active') {
+        $stmt = $this->db->prepare("INSERT INTO users (username, password, email, prenom, nom, status, created_at) VALUES (?, ?, ?, ?, ?, ?, NOW())");
+        if ($stmt->execute([$username, $password, $email, $prenom, $nom, $status])) {
             return $this->db->lastInsertId();
         }
         return false;

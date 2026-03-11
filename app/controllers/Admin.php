@@ -329,10 +329,35 @@ class Admin extends Controller
         $this->requirePerm('manage_users');
         $userModel = new User();
         $db = Database::getConnection();
+        
+        // Compteur des comptes en attente d'approbation
         $stmtPending = $db->query("SELECT COUNT(*) FROM users WHERE status = 'pending_approval'");
-        $count_pending = $stmtPending->fetchColumn();
+        $count_pending = (int)$stmtPending->fetchColumn();
 
+        // ═══════════════════════════════════════════════════════
+        // TRAITEMENT POST : Approbation de compte
+        // ═══════════════════════════════════════════════════════
+        if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['approve_user'])) {
+            $this->checkCsrf();
+            $targetId = (int)($_POST['user_id'] ?? 0);
+            
+            if ($targetId > 0) {
+                // Passer le statut à 'active'
+                $stmt = $db->prepare("UPDATE users SET status = 'active' WHERE id = :id");
+                $stmt->execute(['id' => $targetId]);
+                
+                Log::add('APPROVE_USER', "Approbation du compte utilisateur ID: " . $targetId);
+                setToast("Le compte a été approuvé avec succès.");
+                
+                // Retour vers la page users avec un flag pour rouvrir la modale
+                $_SESSION['open_pending_modal'] = true;
+            }
+            $this->redirect('admin/users');
+        }
 
+        // ═══════════════════════════════════════════════════════
+        // TRAITEMENT POST : Suppression d'utilisateur
+        // ═══════════════════════════════════════════════════════
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_user'])) {
             $this->checkCsrf();
             $targetId = (int)($_POST['user_id'] ?? 0);
@@ -343,10 +368,18 @@ class Admin extends Controller
                 $userModel->delete($targetId);
                 Log::add('DELETE_USER', "Suppression compte ID: " . $targetId);
                 setToast("Utilisateur supprimé avec succès.");
+                
+                // Si c'était un compte en attente, on rouvre la modale
+                if (isset($_POST['from_pending'])) {
+                    $_SESSION['open_pending_modal'] = true;
+                }
             }
             $this->redirect('admin/users');
         }
 
+        // ═══════════════════════════════════════════════════════
+        // RÉCUPÉRATION DES UTILISATEURS (Pagination principale)
+        // ═══════════════════════════════════════════════════════
         $limit = 20;
         $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
         $totalUsers = $userModel->countAll();
@@ -356,13 +389,53 @@ class Admin extends Controller
             $u['permissions'] = $userModel->getPermissions((int)$u['id']);
         }
 
+        // ═══════════════════════════════════════════════════════
+        // RÉCUPÉRATION DES COMPTES EN ATTENTE (Pour la modale)
+        // ═══════════════════════════════════════════════════════
+        $pending_limit = 10;
+        $pending_page = isset($_GET['pending_page']) ? max(1, (int)$_GET['pending_page']) : 1;
+        $pending_offset = ($pending_page - 1) * $pending_limit;
+        
+        $stmtPendingList = $db->prepare("
+            SELECT id, username, email, prenom, nom, created_at 
+            FROM users 
+            WHERE status = 'pending_approval' 
+            ORDER BY created_at DESC
+            LIMIT :limit OFFSET :offset
+        ");
+        $stmtPendingList->bindValue(':limit', $pending_limit, \PDO::PARAM_INT);
+        $stmtPendingList->bindValue(':offset', $pending_offset, \PDO::PARAM_INT);
+        $stmtPendingList->execute();
+        $pending_users = $stmtPendingList->fetchAll(\PDO::FETCH_ASSOC);
+        
+        $pending_total = $count_pending;
+        $pending_pages = ceil($pending_total / $pending_limit);
+
+        // ═══════════════════════════════════════════════════════
+        // FLAG D'OUVERTURE DE LA MODALE (Après action)
+        // ═══════════════════════════════════════════════════════
+        $open_pending_modal = false;
+        if (isset($_SESSION['open_pending_modal'])) {
+            $open_pending_modal = true;
+            unset($_SESSION['open_pending_modal']);
+        }
+
+        // ═══════════════════════════════════════════════════════
+        // RENDU DE LA VUE
+        // ═══════════════════════════════════════════════════════
         $this->render('admin/users', [
             'users' => $users,
             'csrf' => $_SESSION['csrf'] ?? '',
             'page' => $page,
             'totalPages' => ceil($totalUsers / $limit),
             'totalUsers' => $totalUsers,
-            'limit' => $limit
+            'limit' => $limit,
+            'count_pending' => $count_pending,
+            'pending_users' => $pending_users,
+            'pending_total' => $pending_total,
+            'pending_page' => $pending_page,
+            'pending_pages' => $pending_pages,
+            'open_pending_modal' => $open_pending_modal
         ]);
     }
 
@@ -394,6 +467,12 @@ class Admin extends Controller
             $nom      = trim($_POST['nom'] ?? '');
             $email    = trim($_POST['email'] ?? '');
             $password = (string)($_POST['password'] ?? '');
+            
+            // Récupération du statut (active par défaut, ou pending_email si demandé)
+            $status = $_POST['status'] ?? 'active';
+            if (!in_array($status, ['active', 'pending_email', 'pending_approval', 'inactive'])) {
+                $status = 'active';
+            }
 
             if ($userModel->findByEmail($email)) {
                 setToast("L'adresse mail {$email} est déjà utilisée par un autre compte.", "danger");
@@ -411,7 +490,8 @@ class Admin extends Controller
                     password_hash($password, PASSWORD_DEFAULT),
                     $email,
                     $prenom,
-                    $nom
+                    $nom,
+                    $status  // Passage du statut
                 );
                 $userModel->syncPermissions((int)$newId, $slugs);
 
@@ -422,7 +502,7 @@ class Admin extends Controller
                     }
                 }
 
-                Log::add('CREATE_USER', "Création utilisateur : " . $username);
+                Log::add('CREATE_USER', "Création utilisateur : " . $username . " (statut: $status)");
                 setToast("L'utilisateur a été créé avec succès.");
                 $this->redirect('admin/users');
                 exit;
