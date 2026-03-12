@@ -32,6 +32,11 @@ class User {
         return $stmt->fetch(PDO::FETCH_ASSOC);
     }
 
+    /**
+     * Vérifie si l'utilisateur connecté a la permission spécifiée
+     * @param string $permissionSlug Le slug de la permission à vérifier
+     * @return bool
+     **/
     public static function can($permissionSlug) {
         if (session_status() === PHP_SESSION_NONE || !isset($_SESSION['permissions'])) {
             return false;

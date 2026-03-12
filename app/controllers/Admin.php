@@ -11,23 +11,16 @@ use app\core\Database;
 
 class Admin extends Controller
 {
-    // ==========================================
-    // 1. CONSTRUCTEUR ET SÉCURITÉ
-    // ==========================================
+    // --- Sécurité / initialisation ---
 
     public function __construct()
     {
-        // 1) Auth obligatoire
         if (!isset($_SESSION['user_id'])) {
             $currentPath = $_GET['url'] ?? '';
             $this->redirect('login?return=' . urlencode($currentPath));
             exit;
         }
-
-        // 2) Accès admin si au moins une permission "admin"
         $this->requireAnyPerm(['manage_system', 'manage_users', 'manage_instances', 'view_logs']);
-
-        // 3) CSRF token simple (à injecter dans les formulaires POST)
         if (empty($_SESSION['csrf'])) {
             $_SESSION['csrf'] = bin2hex(random_bytes(32));
         }
@@ -35,17 +28,12 @@ class Admin extends Controller
 
     private function requirePerm(string $perm): void
     {
-        if (!User::can($perm)) {
-            $this->redirect('dashboard');
-            exit;
-        }
+        if (!User::can($perm)) { $this->redirect('dashboard'); exit; }
     }
 
     private function requireAnyPerm(array $perms): void
     {
-        foreach ($perms as $p) {
-            if (User::can($p)) return;
-        }
+        foreach ($perms as $p) { if (User::can($p)) return; }
         $this->redirect('dashboard');
         exit;
     }
@@ -59,64 +47,89 @@ class Admin extends Controller
         }
     }
 
-    // ==========================================
-    // 2. ACCUEIL ADMINISTRATION
-    // ==========================================
+    /**
+     * Récupère la dernière release GitHub (main ou beta).
+     * Mutualisé entre index() et parametres().
+     */
+    private function fetchLatestRelease(string $track = 'main'): ?array
+    {
+        $opts = ['http' => ['method' => 'GET', 'header' => ['User-Agent: KronoInstances-App'], 'timeout' => 3]];
+        $url  = ($track === 'beta')
+            ? 'https://api.github.com/repos/Alexis5155/kronoinstances/releases'
+            : 'https://api.github.com/repos/Alexis5155/kronoinstances/releases/latest';
 
-    public function index() {
-        $userModel = new User();
+        $res = @file_get_contents($url, false, stream_context_create($opts));
+        if (!$res) return null;
+
+        $data    = json_decode($res, true);
+        $release = ($track === 'beta') ? ($data[0] ?? null) : $data;
+        return ($release && isset($release['tag_name'])) ? $release : null;
+    }
+
+    /**
+     * Filtre un tableau de slugs de permissions contre le catalogue autorisé.
+     */
+    private function sanitizeSlugs(array $raw): array
+    {
+        return array_values(array_intersect($raw, array_keys(Permissions::LIST)));
+    }
+
+    /**
+     * Passe un compte en 'active', avec validation d'email optionnelle.
+     */
+    private function activateUser(int $id, bool $verifyEmail = false): void
+    {
+        $cols = $verifyEmail ? "status = 'active', email_verified_at = NOW()" : "status = 'active'";
+        Database::getConnection()->prepare("UPDATE users SET $cols WHERE id = :id")->execute(['id' => $id]);
+    }
+
+
+    // --- Accueil ---
+
+    public function index()
+    {
+        $userModel     = new User();
         $instanceModel = new Instance();
-        $logModel = new Log();
-        
-        // --- Vérification des mises à jour (Via API Github) ---
+
         $has_update = false;
         $new_v_name = '';
 
         if (User::can('manage_system')) {
-            $opts = ['http' => ['method' => 'GET', 'header' => ['User-Agent: KronoInstances-App'], 'timeout' => 2]];
-            $context = stream_context_create($opts);
-            
-            $url = "https://api.github.com/repos/Alexis5155/kronoinstances/releases/latest";
-            
-            $res = @file_get_contents($url, false, $context);
-            if ($res) {
-                $release = json_decode($res, true);
-                if (isset($release['tag_name'])) {
-                    $new_version = $release['tag_name'];
-                    if (defined('APP_VERSION') && version_compare($new_version, APP_VERSION, '>')) {
-                        $has_update = true;
-                        $new_v_name = $new_version;
-                    }
-                }
+            $release = $this->fetchLatestRelease();
+            if ($release && defined('APP_VERSION') && version_compare($release['tag_name'], APP_VERSION, '>')) {
+                $has_update = true;
+                $new_v_name = $release['tag_name'];
             }
         }
 
-        // --- Statistiques ---
-        $count_users = $userModel->countAll();
+        $count_pending = 0;
+        if (User::can('manage_users')) {
+            $stmt = Database::getConnection()->query("SELECT COUNT(*) FROM users WHERE status = 'pending_approval'");
+            $count_pending = (int)$stmt->fetchColumn();
+        }
+
         $all_instances = $instanceModel->getAll();
-        $count_instances = count($all_instances);
-        
         $count_membres = 0;
         foreach ($all_instances as $inst) {
             $count_membres += count($instanceModel->getMembres($inst['id']));
         }
 
         $this->render('admin/index', [
-            'title' => 'Administration',
-            'count_users' => $count_users,
-            'count_instances' => $count_instances,
-            'count_membres' => $count_membres,
-            'has_update' => $has_update,
-            'new_v_name' => $new_v_name
+            'title'           => 'Administration',
+            'count_users'     => $userModel->countAll(),
+            'count_instances' => count($all_instances),
+            'count_membres'   => $count_membres,
+            'has_update'      => $has_update,
+            'new_v_name'      => $new_v_name,
+            'count_pending'   => $count_pending,
         ]);
     }
 
-    // ==========================================
-    // 3. PARAMÈTRES (Section découpée)
-    // ==========================================
 
-    public function parametres() {
-        // Redirection si aucun droit d'accès
+    // --- Paramètres système ---
+
+    public function parametres()
+    {
         if (!User::can('manage_system')) {
             setToast("Accès non autorisé.", "danger");
             $this->redirect('admin');
@@ -124,19 +137,13 @@ class Admin extends Controller
         }
 
         $paramModel = new Parametre();
-        $section = $_GET['section'] ?? 'general';
+        $allowed    = ['general', 'smtp', 'connexion', 'system', 'update'];
+        $section    = in_array($_GET['section'] ?? '', $allowed) ? $_GET['section'] : 'general';
 
-        $allowed_sections = ['general', 'smtp', 'connexion', 'system', 'update'];
-        if (!in_array($section, $allowed_sections)) {
-            $section = 'general';
-        }
-
-        // --- TRAITEMENT POST ---
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $this->checkCsrf();
             $action = $_POST['action'] ?? '';
 
-            // 1. Général (Base de données)
             if ($action === 'update_general') {
                 $colName = trim($_POST['col_name'] ?? '');
                 $paramModel->set('collectivite_nom', $colName);
@@ -145,30 +152,20 @@ class Admin extends Controller
                 $this->redirect('admin/parametres?section=general');
             }
 
-            // 2. Base de données (Réécriture config.php)
             if ($action === 'update_system') {
-                $db_host = trim($_POST['db_host'] ?? '');
-                $db_name = trim($_POST['db_name'] ?? '');
-                $db_user = trim($_POST['db_user'] ?? '');
-                $db_pass = trim($_POST['db_pass'] ?? ''); // Le mot de passe peut être vide localement
-                
-                // Vérification du mot de passe de l'utilisateur connecté pour cette action critique
-                $confirm_password = $_POST['confirm_password'] ?? '';
-                $currentUser = (new User())->getById($_SESSION['user_id']);
-                
-                if (!password_verify($confirm_password, $currentUser['password'])) {
+                $confirm = $_POST['confirm_password'] ?? '';
+                $current = (new User())->getById($_SESSION['user_id']);
+                if (!password_verify($confirm, $current['password'])) {
                     setToast("Mot de passe administrateur incorrect.", "danger");
                     $this->redirect('admin/parametres?section=system');
                     exit;
                 }
-
                 $updates = [
-                    'DB_HOST' => $db_host,
-                    'DB_NAME' => $db_name,
-                    'DB_USER' => $db_user,
-                    'DB_PASS' => $db_pass
+                    'DB_HOST' => trim($_POST['db_host'] ?? ''),
+                    'DB_NAME' => trim($_POST['db_name'] ?? ''),
+                    'DB_USER' => trim($_POST['db_user'] ?? ''),
+                    'DB_PASS' => trim($_POST['db_pass'] ?? ''), // peut être vide en local
                 ];
-
                 if ($this->updateConfigFile($updates)) {
                     Log::add('UPDATE_PARAM', "Mise à jour des identifiants de base de données");
                     setToast("Configuration base de données enregistrée avec succès. Déconnexion requise si les identifiants ont changé.");
@@ -178,20 +175,17 @@ class Admin extends Controller
                 $this->redirect('admin/parametres?section=system');
             }
 
-            // 3. SMTP (Réécriture config.php)
             if ($action === 'update_smtp') {
                 $updates = [
                     'MAIL_HOST' => trim($_POST['smtp_host'] ?? ''),
                     'MAIL_PORT' => trim($_POST['smtp_port'] ?? '587'),
                     'MAIL_USER' => trim($_POST['smtp_user'] ?? ''),
-                    'MAIL_FROM' => trim($_POST['smtp_from'] ?? '')
+                    'MAIL_FROM' => trim($_POST['smtp_from'] ?? ''),
                 ];
-
-                // On ne modifie le mot de passe que s'il a été rempli
+                // mot de passe SMTP seulement si renseigné
                 if (!empty($_POST['smtp_pass'])) {
                     $updates['MAIL_PASS'] = trim($_POST['smtp_pass']);
                 }
-
                 if ($this->updateConfigFile($updates)) {
                     Log::add('UPDATE_PARAM', "Mise à jour de la configuration SMTP");
                     setToast("Configuration email enregistrée avec succès.");
@@ -201,24 +195,18 @@ class Admin extends Controller
                 $this->redirect('admin/parametres?section=smtp');
             }
 
-            // 4. Test d'envoi Email
             if ($action === 'test_email') {
                 $testEmail = trim($_POST['test_email_address'] ?? '');
-                
                 if (filter_var($testEmail, FILTER_VALIDATE_EMAIL)) {
                     $subject = "Test de configuration SMTP - KronoInstances";
-                    $body = "
+                    $body    = "
                         <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;'>
                             <h2 style='color: #0d6efd;'>Test réussi ! ✅</h2>
                             <p>Victoire !</p>
                             <p>Si vous lisez ce message, cela signifie que votre configuration SMTP sur <b>KronoInstances</b> fonctionne parfaitement.</p>
                         </div>
                     ";
-
-                    // Utilisation de la classe Mailer
-                    $success = \app\core\Mailer::send($testEmail, $subject, $body);
-
-                    if ($success) {
+                    if (\app\core\Mailer::send($testEmail, $subject, $body)) {
                         setToast("Un email de test a été envoyé avec succès à $testEmail.", "success");
                         Log::add('SYSTEM_TEST', "Email de test envoyé à $testEmail");
                     } else {
@@ -230,7 +218,6 @@ class Admin extends Controller
                 $this->redirect('admin/parametres?section=smtp');
             }
 
-            // 5. Update system...
             if ($action === 'update_update_settings') {
                 $track = trim($_POST['update_track'] ?? 'main');
                 $paramModel->set('update_track', $track);
@@ -239,236 +226,154 @@ class Admin extends Controller
             }
         }
 
-        // --- PRÉPARATION DES DONNÉES POUR LES VUES ---
         $data = [
-            'title' => 'Paramètres Système',
+            'title'   => 'Paramètres Système',
             'section' => $section,
-            'csrf' => $_SESSION['csrf'] ?? ''
+            'csrf'    => $_SESSION['csrf'] ?? '',
         ];
 
         if ($section === 'general') {
             $data['col_nom'] = $paramModel->get('collectivite_nom') ?: 'KronoInstances';
-        }
-        elseif ($section === 'update') {
-            $data['update_track'] = $paramModel->get('update_track') ?: 'main';
-            $data['update_data'] = null;
-
-            $opts = ['http' => ['method' => 'GET', 'header' => ['User-Agent: KronoInstances-App'], 'timeout' => 3]];
-            $context = stream_context_create($opts);
-            
-            $url = ($data['update_track'] === 'beta') 
-                ? "https://api.github.com/repos/Alexis5155/kronoinstances/releases" 
-                : "https://api.github.com/repos/Alexis5155/kronoinstances/releases/latest";
-
-            $res = @file_get_contents($url, false, $context);
-            if ($res) {
-                $releaseList = json_decode($res, true);
-                $release = ($data['update_track'] === 'beta') ? ($releaseList[0] ?? null) : $releaseList;
-
-                if ($release && isset($release['tag_name'])) {
-                    $new_version = $release['tag_name'];
-                    $current_version = defined('APP_VERSION') ? APP_VERSION : '0.0.0';
-                    $data['update_data'] = [
-                        'version' => $new_version,
-                        'has_new' => version_compare($new_version, $current_version, '>'),
-                        'changelog' => $release['body'] ?? 'Aucune note de version.'
-                    ];
-                }
+        } elseif ($section === 'update') {
+            $track               = $paramModel->get('update_track') ?: 'main';
+            $data['update_track'] = $track;
+            $data['update_data']  = null;
+            $release = $this->fetchLatestRelease($track);
+            if ($release) {
+                $data['update_data'] = [
+                    'version'   => $release['tag_name'],
+                    'has_new'   => version_compare($release['tag_name'], defined('APP_VERSION') ? APP_VERSION : '0.0.0', '>'),
+                    'changelog' => $release['body'] ?? 'Aucune note de version.',
+                ];
             }
         }
 
         $this->render('admin/parametres/_wrapper', $data);
     }
 
-    /**
-     * Méthode pour mettre à jour le fichier config.php
-     */
-    private function updateConfigFile(array $updates): bool {
+    private function updateConfigFile(array $updates): bool
+    {
         $configFile = __DIR__ . '/../config/config.php';
-        
-        if (!file_exists($configFile) || !is_writable($configFile)) {
-            return false;
-        }
+        if (!file_exists($configFile) || !is_writable($configFile)) return false;
 
         $content = file_get_contents($configFile);
-
         foreach ($updates as $key => $value) {
-            // Échapper les apostrophes et antislashs pour ne pas casser le PHP
-            $safeValue = addslashes($value);
-            
-            // Cherche : define('MA_CONSTANTE', 'ancienne_valeur');
-            // Remplace par : define('MA_CONSTANTE', 'nouvelle_valeur');
-            $pattern = "/define\(\s*['\"]" . preg_quote($key, '/') . "['\"]\s*,\s*['\"].*?['\"]\s*\);/s";
-            $replacement = "define('" . $key . "', '" . $safeValue . "');";
-            
-            // Si la constante existe, on la remplace
+            $safeValue   = addslashes($value);
+            $pattern     = "/define\(\s*['\"]" . preg_quote($key, '/') . "['\"]\s*,\s*['\"].*?['\"]\s*\);/s";
+            $replacement = "define('$key', '$safeValue');";
             if (preg_match($pattern, $content)) {
                 $content = preg_replace($pattern, $replacement, $content);
             } else {
-                // Si la constante n'existe pas (ex: ajout lors d'une maj), on l'ajoute à la fin avant la balise PHP fermante
-                // Si la balise fermante n'existe pas, on l'ajoute à la toute fin
-                $newDefine = "\ndefine('" . $key . "', '" . $safeValue . "');\n";
-                if (strpos($content, '?>') !== false) {
-                    $content = str_replace('?>', $newDefine . '?>', $content);
-                } else {
-                    $content .= $newDefine;
-                }
+                // constante absente : ajout avant '>?' ou en fin de fichier
+                $newDefine = "\ndefine('$key', '$safeValue');\n";
+                $content   = strpos($content, '?>') !== false
+                    ? str_replace('?>', $newDefine . '?>', $content)
+                    : $content . $newDefine;
             }
         }
-
         return file_put_contents($configFile, $content) !== false;
     }
 
+    // --- Utilisateurs ---
 
-
-    // ==========================================
-    // 4. GESTION DES UTILISATEURS
-    // ==========================================
-
-    public function users() {
+    public function users()
+    {
         $this->requirePerm('manage_users');
         $userModel = new User();
-        $db = Database::getConnection();
-        
-        // Compteur des comptes en attente d'approbation
-        $stmtPending = $db->query("SELECT COUNT(*) FROM users WHERE status = 'pending_approval'");
-        $count_pending = (int)$stmtPending->fetchColumn();
+        $db        = Database::getConnection();
 
-        // ═══════════════════════════════════════════════════════
-        // TRAITEMENT POST : Approbation de compte
-        // ═══════════════════════════════════════════════════════
-        if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['approve_user'])) {
+        $count_pending = (int)$db->query("SELECT COUNT(*) FROM users WHERE status = 'pending_approval'")->fetchColumn();
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $this->checkCsrf();
             $targetId = (int)($_POST['user_id'] ?? 0);
-            
-            if ($targetId > 0) {
-                // Passer le statut à 'active'
-                $stmt = $db->prepare("UPDATE users SET status = 'active' WHERE id = :id");
-                $stmt->execute(['id' => $targetId]);
-                
+
+            if (isset($_POST['approve_user']) && $targetId > 0) {
+                $this->activateUser($targetId);
                 Log::add('APPROVE_USER', "Approbation du compte utilisateur ID: " . $targetId);
                 setToast("Le compte a été approuvé avec succès.");
-                
-                // Retour vers la page users avec un flag pour rouvrir la modale
                 $_SESSION['open_pending_modal'] = true;
+                $this->redirect('admin/users');
             }
-            $this->redirect('admin/users');
-        }
 
-        // ═══════════════════════════════════════════════════════
-        // TRAITEMENT POST : Suppression d'utilisateur
-        // ═══════════════════════════════════════════════════════
-        if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_user'])) {
-            $this->checkCsrf();
-            $targetId = (int)($_POST['user_id'] ?? 0);
-
-            if ($targetId === (int)$_SESSION['user_id']) {
-                setToast("Action impossible sur votre propre compte.", "danger");
-            } else {
-                $userModel->delete($targetId);
-                Log::add('DELETE_USER', "Suppression compte ID: " . $targetId);
-                setToast("Utilisateur supprimé avec succès.");
-                
-                // Si c'était un compte en attente, on rouvre la modale
-                if (isset($_POST['from_pending'])) {
-                    $_SESSION['open_pending_modal'] = true;
+            if (isset($_POST['delete_user'])) {
+                if ($targetId === (int)$_SESSION['user_id']) {
+                    setToast("Action impossible sur votre propre compte.", "danger");
+                } else {
+                    $userModel->delete($targetId);
+                    Log::add('DELETE_USER', "Suppression compte ID: " . $targetId);
+                    setToast("Utilisateur supprimé avec succès.");
+                    if (isset($_POST['from_pending'])) {
+                        $_SESSION['open_pending_modal'] = true;
+                    }
                 }
+                $this->redirect('admin/users');
             }
-            $this->redirect('admin/users');
         }
 
-        // ═══════════════════════════════════════════════════════
-        // RÉCUPÉRATION DES UTILISATEURS (Pagination principale)
-        // ═══════════════════════════════════════════════════════
-        $limit = 20;
-        $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
+        $limit      = 20;
+        $page       = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
         $totalUsers = $userModel->countAll();
-        
-        $users = $userModel->getPaginated($limit, ($page - 1) * $limit); 
+        $users      = $userModel->getPaginated($limit, ($page - 1) * $limit);
         foreach ($users as &$u) {
             $u['permissions'] = $userModel->getPermissions((int)$u['id']);
         }
 
-        // ═══════════════════════════════════════════════════════
-        // RÉCUPÉRATION DES COMPTES EN ATTENTE (Pour la modale)
-        // ═══════════════════════════════════════════════════════
         $pending_limit = 10;
-        $pending_page = isset($_GET['pending_page']) ? max(1, (int)$_GET['pending_page']) : 1;
-        $pending_offset = ($pending_page - 1) * $pending_limit;
-        
-        $stmtPendingList = $db->prepare("
-            SELECT id, username, email, prenom, nom, created_at 
-            FROM users 
-            WHERE status = 'pending_approval' 
+        $pending_page  = isset($_GET['pending_page']) ? max(1, (int)$_GET['pending_page']) : 1;
+        $stmtList = $db->prepare("
+            SELECT id, username, email, prenom, nom, created_at
+            FROM users WHERE status = 'pending_approval'
             ORDER BY created_at DESC
             LIMIT :limit OFFSET :offset
         ");
-        $stmtPendingList->bindValue(':limit', $pending_limit, \PDO::PARAM_INT);
-        $stmtPendingList->bindValue(':offset', $pending_offset, \PDO::PARAM_INT);
-        $stmtPendingList->execute();
-        $pending_users = $stmtPendingList->fetchAll(\PDO::FETCH_ASSOC);
-        
-        $pending_total = $count_pending;
-        $pending_pages = ceil($pending_total / $pending_limit);
+        $stmtList->bindValue(':limit',  $pending_limit, \PDO::PARAM_INT);
+        $stmtList->bindValue(':offset', ($pending_page - 1) * $pending_limit, \PDO::PARAM_INT);
+        $stmtList->execute();
 
-        // ═══════════════════════════════════════════════════════
-        // FLAG D'OUVERTURE DE LA MODALE (Après action)
-        // ═══════════════════════════════════════════════════════
-        $open_pending_modal = false;
-        if (isset($_SESSION['open_pending_modal'])) {
-            $open_pending_modal = true;
-            unset($_SESSION['open_pending_modal']);
-        }
+        $open_pending_modal = (bool)($_SESSION['open_pending_modal'] ?? false);
+        unset($_SESSION['open_pending_modal']);
 
-        // ═══════════════════════════════════════════════════════
-        // RENDU DE LA VUE
-        // ═══════════════════════════════════════════════════════
         $this->render('admin/users', [
-            'users' => $users,
-            'csrf' => $_SESSION['csrf'] ?? '',
-            'page' => $page,
-            'totalPages' => ceil($totalUsers / $limit),
-            'totalUsers' => $totalUsers,
-            'limit' => $limit,
-            'count_pending' => $count_pending,
-            'pending_users' => $pending_users,
-            'pending_total' => $pending_total,
-            'pending_page' => $pending_page,
-            'pending_pages' => $pending_pages,
-            'open_pending_modal' => $open_pending_modal
+            'users'              => $users,
+            'csrf'               => $_SESSION['csrf'] ?? '',
+            'page'               => $page,
+            'totalPages'         => ceil($totalUsers / $limit),
+            'totalUsers'         => $totalUsers,
+            'limit'              => $limit,
+            'count_pending'      => $count_pending,
+            'pending_users'      => $stmtList->fetchAll(\PDO::FETCH_ASSOC),
+            'pending_total'      => $count_pending,
+            'pending_page'       => $pending_page,
+            'pending_pages'      => ceil($count_pending / $pending_limit),
+            'open_pending_modal' => $open_pending_modal,
         ]);
     }
 
-    public function checkEmailMembers() {
+    public function checkEmailMembers()
+    {
         header('Content-Type: application/json');
         $this->requirePerm('manage_users');
-        
         $email = $_GET['email'] ?? '';
-        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            echo json_encode([]);
-            exit;
-        }
-
-        $instanceModel = new Instance();
-        $orphans = $instanceModel->getOrphanMembresByEmail($email);
-        echo json_encode($orphans);
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) { echo json_encode([]); exit; }
+        echo json_encode((new Instance())->getOrphanMembresByEmail($email));
         exit;
     }
 
-    public function userAdd() {
+    public function userAdd()
+    {
         $this->requirePerm('manage_users');
         $userModel = new User();
-        $catalog = \app\config\Permissions::LIST;
+        $catalog   = Permissions::LIST;
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $this->checkCsrf();
             $username = trim($_POST['username'] ?? '');
-            $prenom   = trim($_POST['prenom'] ?? '');
-            $nom      = trim($_POST['nom'] ?? '');
-            $email    = trim($_POST['email'] ?? '');
+            $prenom   = trim($_POST['prenom']   ?? '');
+            $nom      = trim($_POST['nom']      ?? '');
+            $email    = trim($_POST['email']    ?? '');
             $password = (string)($_POST['password'] ?? '');
-            
-            // Récupération du statut (active par défaut, ou pending_email si demandé)
+
             $status = $_POST['status'] ?? 'active';
             if (!in_array($status, ['active', 'pending_email', 'pending_approval', 'inactive'])) {
                 $status = 'active';
@@ -480,18 +385,14 @@ class Admin extends Controller
                 exit;
             }
 
-            $slugs = $_POST['permissions'] ?? [];
-            if (!is_array($slugs)) $slugs = [];
-            $slugs = array_values(array_intersect($slugs, array_keys($catalog)));
+            $slugs = $this->sanitizeSlugs($_POST['permissions'] ?? []);
 
             try {
                 $newId = $userModel->create(
                     $username,
                     password_hash($password, PASSWORD_DEFAULT),
-                    $email,
-                    $prenom,
-                    $nom,
-                    $status  // Passage du statut
+                    $email, $prenom, $nom,
+                    $status // Passage du statut
                 );
                 $userModel->syncPermissions((int)$newId, $slugs);
 
@@ -513,20 +414,18 @@ class Admin extends Controller
 
         $this->render('admin/user_create', [
             'catalog' => $catalog,
-            'csrf' => $_SESSION['csrf'] ?? ''
+            'csrf'    => $_SESSION['csrf'] ?? '',
         ]);
     }
 
-    public function userEdit($id = null) {
+    public function userEdit($id = null)
+    {
         $this->requirePerm('manage_users');
-        if (!$id) {
-            $this->redirect('admin/users');
-            exit;
-        }
+        if (!$id) { $this->redirect('admin/users'); exit; }
 
-        $userModel = new User();
+        $userModel     = new User();
         $instanceModel = new Instance();
-        $catalog = \app\config\Permissions::LIST;
+        $catalog       = Permissions::LIST;
 
         $user = $userModel->getById($id);
         if (!$user) {
@@ -537,9 +436,27 @@ class Admin extends Controller
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $this->checkCsrf();
-            $email    = trim($_POST['email'] ?? '');
-            $prenom   = trim($_POST['prenom'] ?? '');
-            $nom      = trim($_POST['nom'] ?? '');
+
+            if (isset($_POST['approve_user'])) {
+                $this->activateUser((int)$id);
+                Log::add('APPROVE_USER', "Approbation du compte utilisateur ID: " . $id);
+                setToast("Le compte a été approuvé avec succès.");
+                $this->redirect('admin/userEdit/' . $id);
+                exit;
+            }
+
+            if (isset($_POST['force_verify_email'])) {
+                $this->activateUser((int)$id, true);
+                Log::add('VERIFY_EMAIL', "Validation forcée de l'e-mail pour l'utilisateur ID: " . $id);
+                setToast("L'adresse e-mail a été validée de force.");
+                $this->redirect('admin/userEdit/' . $id);
+                exit;
+            }
+
+            // Mise à jour générale (formulaire principal)
+            $email  = trim($_POST['email']  ?? '');
+            $prenom = trim($_POST['prenom'] ?? '');
+            $nom    = trim($_POST['nom']    ?? '');
 
             $existing = $userModel->findByEmail($email);
             if ($existing && $existing['id'] != $id) {
@@ -548,10 +465,7 @@ class Admin extends Controller
                 exit;
             }
 
-            $slugs = $_POST['permissions'] ?? [];
-            if (!is_array($slugs)) $slugs = [];
-            $slugs = array_values(array_intersect($slugs, array_keys($catalog)));
-
+            $slugs = $this->sanitizeSlugs($_POST['permissions'] ?? []);
             $userModel->updateAdmin($id, $email, $prenom, $nom);
 
             if (!empty($_POST['password'])) {
@@ -576,44 +490,38 @@ class Admin extends Controller
             exit;
         }
 
-        $user['permissions'] = $userModel->getPermissions($id);
-        $allInstances = $instanceModel->getAll();
+        $user['permissions']       = $userModel->getPermissions($id);
         $user['instances_manager'] = [];
-        $user['instances_membre'] = [];
-        
-        foreach ($allInstances as $inst) {
-            $managers = $instanceModel->getManagers($inst['id']);
-            if (in_array($id, $managers)) $user['instances_manager'][] = $inst;
-            
-            $membres = $instanceModel->getMembres($inst['id']);
-            foreach ($membres as $m) {
-                if ($m['user_id'] == $id) {
-                    $user['instances_membre'][] = $inst;
-                    break;
-                }
+        $user['instances_membre']  = [];
+
+        foreach ($instanceModel->getAll() as $inst) {
+            if (in_array($id, $instanceModel->getManagers($inst['id']))) {
+                $user['instances_manager'][] = $inst;
+            }
+            foreach ($instanceModel->getMembres($inst['id']) as $m) {
+                if ($m['user_id'] == $id) { $user['instances_membre'][] = $inst; break; }
             }
         }
-        $orphanMembres = $instanceModel->getOrphanMembresByEmail($user['email']);
 
         $this->render('admin/user_edit', [
-            'u' => $user,
-            'catalog' => $catalog,
-            'orphanMembres' => $orphanMembres,
-            'csrf' => $_SESSION['csrf'] ?? ''
+            'u'             => $user,
+            'catalog'       => $catalog,
+            'orphanMembres' => $instanceModel->getOrphanMembresByEmail($user['email']),
+            'csrf'          => $_SESSION['csrf'] ?? '',
         ]);
     }
 
-    // ==========================================
-    // 5. GESTION DES INSTANCES
-    // ==========================================
 
-    public function instances() {
+    // --- Instances ---
+
+    public function instances()
+    {
         $instanceModel = new Instance();
-        $userModel = new User();
+        $userModel     = new User();
 
         if (isset($_GET['delete_id'])) {
             $targetId = (int)$_GET['delete_id'];
-            $inst = $instanceModel->getById($targetId);
+            $inst     = $instanceModel->getById($targetId);
             if ($inst) {
                 $instanceModel->delete($targetId);
                 Log::add('DELETE_INSTANCE', "Suppression de l'instance : " . $inst['nom']);
@@ -623,20 +531,15 @@ class Admin extends Controller
         }
 
         if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['save_instance'])) {
-            $id = $_POST['instance_id'] ?? null;
-            $nom = trim($_POST['nom']);
-            $desc = trim($_POST['description'] ?? '');
-            $nbTit = (int)($_POST['nb_titulaires'] ?? 0);
-            $nbSup = (int)($_POST['nb_suppleants'] ?? 0);
-            $quorum = (int)($_POST['quorum'] ?? 0);
-
-            $managers = $_POST['managers'] ?? [];
-            
-            $membresJson = $_POST['membres_json'] ?? '[]';
-            $membresArray = json_decode($membresJson, true);
-            if (!is_array($membresArray)) {
-                $membresArray = [];
-            }
+            $id           = $_POST['instance_id'] ?? null;
+            $nom          = trim($_POST['nom']);
+            $desc         = trim($_POST['description'] ?? '');
+            $nbTit        = (int)($_POST['nb_titulaires'] ?? 0);
+            $nbSup        = (int)($_POST['nb_suppleants'] ?? 0);
+            $quorum       = (int)($_POST['quorum'] ?? 0);
+            $managers     = $_POST['managers'] ?? [];
+            $membresArray = json_decode($_POST['membres_json'] ?? '[]', true);
+            if (!is_array($membresArray)) $membresArray = [];
 
             if (!empty($nom)) {
                 if (empty($id)) {
@@ -670,8 +573,7 @@ class Admin extends Controller
                     setToast("Le modèle doit obligatoirement être un fichier au format .odt", "danger");
                 } else {
                     $uploadDir = 'uploads/modeles/';
-                    if (!is_dir($uploadDir)) { mkdir($uploadDir, 0777, true); }
-                    
+                    if (!is_dir($uploadDir)) mkdir($uploadDir, 0777, true);
                     $destPath = $uploadDir . 'modele_instance_' . $instanceId . '.odt';
                     if (move_uploaded_file($_FILES['modele_odt']['tmp_name'], $destPath)) {
                         Log::add('UPDATE_INSTANCE', "Upload du modèle de convocation pour l'instance ID: " . $instanceId);
@@ -683,10 +585,10 @@ class Admin extends Controller
             }
             $this->redirect('admin/instances');
         }
-        
+
         if (isset($_GET['delete_modele_id'])) {
             $targetId = (int)$_GET['delete_modele_id'];
-            $path = 'uploads/modeles/modele_instance_' . $targetId . '.odt';
+            $path     = 'uploads/modeles/modele_instance_' . $targetId . '.odt';
             if (file_exists($path)) {
                 unlink($path);
                 Log::add('UPDATE_INSTANCE', "Suppression du modèle de convocation pour l'instance ID: " . $targetId);
@@ -698,28 +600,25 @@ class Admin extends Controller
         $instances = $instanceModel->getAll();
         foreach ($instances as &$inst) {
             $inst['managers'] = $instanceModel->getManagers($inst['id']);
-            $inst['membres'] = $instanceModel->getMembres($inst['id']);
+            $inst['membres']  = $instanceModel->getMembres($inst['id']);
         }
 
         $this->render('admin/instances', [
             'instances' => $instances,
-            'all_users' => $userModel->getList() 
+            'all_users' => $userModel->getList(),
         ]);
     }
 
-    // ==========================================
-    // 6. LOGS SYSTÈME
-    // ==========================================
+
+    // --- Logs ---
 
     public function logs()
     {
         $this->requirePerm('view_logs');
-
-        $logModel = new Log();
-        $limit = 50;
-        $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
-        $filters = ['search' => $_GET['search'] ?? ''];
-
+        $logModel  = new Log();
+        $limit     = 50;
+        $page      = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+        $filters   = ['search' => $_GET['search'] ?? ''];
         $totalLogs = $logModel->countFiltered($filters);
 
         $this->render('admin/logs', [
@@ -727,7 +626,7 @@ class Admin extends Controller
             'totalLogs'  => $totalLogs,
             'totalPages' => ceil($totalLogs / $limit),
             'page'       => $page,
-            'filters'    => $filters
+            'filters'    => $filters,
         ]);
     }
 }

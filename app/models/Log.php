@@ -13,7 +13,7 @@ class Log {
 
     /**
      * Enregistre une action dans les logs
-     * @param string $action L'action effectuée (ex: "Création de séance")
+     * @param string $action Tag de l'action (ex: "CREATE_SEANCE", "DELETE_USER", etc.)
      * @param string $details Détails supplémentaires sur l'action (ex: "Séance ID: 123")
      * @param int|null $target_id ID de l'entité ciblée (ex: ID de la séance)
      * @param string|null $target_type Type de l'entité ciblée (ex: "seance")

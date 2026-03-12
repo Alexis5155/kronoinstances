@@ -26,6 +26,21 @@
         display: flex; align-items: center; justify-content: center;
         border-radius: 12px; font-size: 1.5rem; margin-bottom: 1.2rem;
     }
+
+    .icon-box-admin {
+    width: 52px;
+    height: 52px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.4rem;
+    margin-bottom: 1rem;
+    position: relative;
+    overflow: visible;
+    flex-shrink: 0;
+    }
+
 </style>
 
 <div class="container py-4">
@@ -120,7 +135,7 @@
                     <div class="icon-box-admin bg-primary bg-opacity-10 text-primary position-relative">
                         <i class="bi bi-person-gear"></i>
                         <?php if (!empty($count_pending) && $count_pending > 0): ?>
-                            <span class="position-absolute top-0 end-0 translate-middle badge rounded-pill bg-warning text-dark" style="font-size:0.65rem;">
+                            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size:.65rem;">
                                 <?= $count_pending ?>
                             </span>
                         <?php endif; ?>
