@@ -1,0 +1,180 @@
+/* ============================================================
+   STAT CARDS (dashboard.php, admin/index.php)
+   ============================================================ */
+.stat-card { z-index: 1; }
+.stat-icon { z-index: -1; right: -10px !important; top: 10px !important; }
+@media (max-width: 1200px) {
+    .stat-icon { opacity: 0.05 !important; }
+}
+
+
+/* ============================================================
+   ICON BOX (admin/index.php, et potentiellement futures pages)
+   ============================================================ */
+.icon-box {
+    width: 52px;
+    height: 52px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.4rem;
+    margin-bottom: 1rem;
+    flex-shrink: 0;
+}
+
+
+/* ============================================================
+   CARD OUTIL / CARD LIEN (admin/index.php, dashboard.php)
+   ============================================================ */
+.card-tool {
+    border-radius: 1rem;
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+    border: 1px solid rgba(0,0,0,0.05) !important;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+.card-tool:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 15px 35px rgba(0,0,0,0.1) !important;
+}
+
+
+/* ============================================================
+   SHORTCUT BTN (dashboard.php accès rapide)
+   ============================================================ */
+.shortcut-btn { transition: transform 0.2s, background-color 0.2s; }
+.shortcut-btn:hover { background-color: #f8f9fa !important; transform: translateX(5px); }
+
+
+/* ============================================================
+   PAGE HEADER (pattern répété dans toutes les vues)
+   Utilisation : <div class="page-header"> autour du bloc titre + bouton
+   ============================================================ */
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+.page-header-avatar {
+    width: 50px;
+    height: 50px;
+    font-size: 1.5rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+
+/* ============================================================
+   TABLE SECTION HEADER (dashboard.php, seances/index.php, admin/users.php...)
+   <thead> avec uppercase + lettre-spacing répété partout
+   ============================================================ */
+.table-head-muted thead {
+    font-size: 0.7rem;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+
+/* ============================================================
+   BADGES DE STATUT SÉANCE (dashboard.php, seances/index.php, seances/view.php...)
+   ============================================================ */
+.badge-statut {
+    font-size: 0.65rem;
+    letter-spacing: 0.5px;
+    font-weight: 700;
+    padding: 0.25rem 0.5rem;
+}
+
+
+/* ============================================================
+   EMPTY STATE (état vide dans les tableaux et listes)
+   Répété dans seances/index.php, dashboard.php, docs...
+   ============================================================ */
+.empty-state {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: #6c757d;
+}
+.empty-state-icon {
+    width: 70px;
+    height: 70px;
+    background-color: #f8f9fa;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.75rem;
+    opacity: 0.5;
+    margin-bottom: 1rem;
+}
+.empty-state h6 { font-weight: 700; color: #343a40; margin-bottom: 0.25rem; }
+.empty-state p  { font-size: 0.85rem; margin: 0; }
+
+
+/* ============================================================
+   SECTION LABEL (labels uppercase répétés dans les filtres, forms)
+   ex: <label class="section-label">Filtrer par instance</label>
+   ============================================================ */
+.section-label {
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #6c757d;
+    margin-bottom: 0.25rem;
+    display: block;
+}
+
+
+/* ============================================================
+   HOVER COULEUR SUR BOUTONS (dashboard.php)
+   ============================================================ */
+.hover-primary { transition: all 0.2s; }
+.hover-primary:hover { background-color: #0d6efd !important; color: white !important; }
+.hover-info    { transition: all 0.2s; }
+.hover-info:hover    { background-color: #0dcaf0 !important; color: white !important; }
+
+
+/* ============================================================
+   CARD SECTION STANDARD (card avec header + body, partout)
+   ============================================================ */
+.card-section {
+    border: 0;
+    border-radius: 1rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+.card-section .card-header {
+    background: white;
+    border-bottom: 0;
+    padding: 1.25rem 1.5rem 0.5rem;
+    font-weight: 700;
+}
+
+
+/* ============================================================
+   NAV PILLS SOMBRE (seances/index.php, et à harmoniser partout)
+   ============================================================ */
+.nav-pills .nav-link.active {
+    background-color: #212529 !important;
+    color: white !important;
+}
+.nav-pills .nav-link:not(.active) {
+    background-color: white;
+    color: #6c757d;
+    border: 1px solid #dee2e6;
+}
+
+
+/* ============================================================
+   TRANSITIONS UTILITAIRES
+   ============================================================ */
+.transition-opacity  { transition: opacity 0.3s ease; }
+.hover-opacity-full:hover { opacity: 1 !important; }
