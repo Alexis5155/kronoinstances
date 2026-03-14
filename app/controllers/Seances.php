@@ -28,53 +28,32 @@ class Seances extends Controller {
      * Affiche le tableau de bord principal des séances (filtrage et tri)
      */
     public function index() {
-        $seanceModel = new Seance();
+        $seanceModel   = new Seance();
         $instanceModel = new Instance();
-        $instances = $instanceModel->getAll();
 
-        // Récupération des filtres depuis l'URL
-        $searchInstance = $_GET['search_instance'] ?? '';
-        $searchDate = $_GET['search_date'] ?? '';
+        $search_periode    = $_GET['search_periode']    ?? '';
+        $search_instance   = $_GET['search_instance']   ?? '';
+        $search_date_debut = $_GET['search_date_debut'] ?? '';
+        $search_date_fin   = $_GET['search_date_fin']   ?? '';
 
-        $toutesSeances = [];
-        foreach ($instances as $inst) {
-            if (!empty($searchInstance) && $inst['id'] != $searchInstance) continue;
-
-            $instSeances = $seanceModel->getByInstance($inst['id']);
-            foreach ($instSeances as $s) {
-                if (!empty($searchDate) && $s['date_seance'] != $searchDate) continue;
-                $s['instance_nom'] = $inst['nom'];
-                $toutesSeances[] = $s;
-            }
-        }
-
-        // Répartition en deux onglets : "À venir" et "Archives"
-        $seancesFutures = [];
-        $seancesPassees = [];
-        $today = date('Y-m-d');
-
-        foreach ($toutesSeances as $s) {
-            // Une séance terminée passe directement aux archives, peu importe la date
-            if ($s['statut'] === 'terminee' || $s['date_seance'] < $today) {
-                $seancesPassees[] = $s;
-            } else {
-                $seancesFutures[] = $s;
-            }
-        }
-
-        // Tri chronologique : le plus proche en haut pour les futures, le plus récent en haut pour les passées
-        usort($seancesFutures, fn($a, $b) => strtotime($a['date_seance']) - strtotime($b['date_seance']));
-        usort($seancesPassees, fn($a, $b) => strtotime($b['date_seance']) - strtotime($a['date_seance']));
+        $seances = $seanceModel->getFiltered(
+            $search_periode,
+            $search_instance,
+            $search_date_debut,
+            $search_date_fin
+        );
 
         $this->render('seances/index', [
-            'title' => 'Gestion des Séances',
-            'instances' => $instances,
-            'seances_futures' => $seancesFutures,
-            'seances_passees' => $seancesPassees,
-            'search_instance' => $searchInstance,
-            'search_date' => $searchDate
+            'title'              => 'Gestion des Séances',
+            'instances'          => $instanceModel->getAll(),
+            'seances'            => $seances,
+            'search_periode'     => $search_periode,
+            'search_instance'    => $search_instance,
+            'search_date_debut'  => $search_date_debut,
+            'search_date_fin'    => $search_date_fin,
         ]);
     }
+
 
     /**
      * Planifie une nouvelle séance (Brouillon par défaut)

@@ -46,6 +46,8 @@
    ============================================================ */
 .shortcut-btn { transition: transform 0.2s, background-color 0.2s; }
 .shortcut-btn:hover { background-color: #f8f9fa !important; transform: translateX(5px); }
+.shortcut-btn-admin { transition: transform 0.2s, background-color 0.2s; }
+.shortcut-btn-admin:hover { background-color: #1a1e21 !important; transform: translateX(5px); }
 
 
 /* ============================================================
@@ -150,12 +152,17 @@
     border: 0;
     border-radius: 1rem;
     box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    overflow: hidden;
 }
 .card-section .card-header {
     background: white;
     border-bottom: 0;
     padding: 1.25rem 1.5rem 0.5rem;
     font-weight: 700;
+}
+
+.stat-card .card-body > .d-flex > div:first-child {
+    border-radius: 0.5rem; /* rounded-3 */
 }
 
 
@@ -178,3 +185,39 @@
    ============================================================ */
 .transition-opacity  { transition: opacity 0.3s ease; }
 .hover-opacity-full:hover { opacity: 1 !important; }
+
+
+/* =====================
+   ADMIN - OUTILS
+   ===================== */
+.card-tool {
+    border-radius: 1rem !important;
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+    border: 1px solid rgba(0,0,0,0.05) !important;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    background: #ffffff;
+}
+.card-tool:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 15px 35px rgba(0,0,0,0.1) !important;
+}
+
+.icon-box-admin {
+    width: 52px; height: 52px;
+    border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.4rem;
+    margin-bottom: 1rem;
+    flex-shrink: 0;
+}
+
+.admin-tool-icon {
+    width: 52px; height: 52px;
+    border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.4rem;
+    margin-bottom: 1rem;
+    flex-shrink: 0;
+}

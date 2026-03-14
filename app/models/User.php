@@ -92,7 +92,7 @@ class User {
     }
 
     public function getList() {
-        return $this->db->query("SELECT id, username, prenom, nom FROM users ORDER BY username ASC")->fetchAll(PDO::FETCH_ASSOC);
+        return $this->db->query("SELECT id, username, prenom, nom, email FROM users ORDER BY username ASC")->fetchAll(PDO::FETCH_ASSOC);
     }
 
     public function getAll() {

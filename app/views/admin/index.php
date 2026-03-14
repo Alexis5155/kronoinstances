@@ -1,53 +1,12 @@
 <?php include __DIR__ . '/../layouts/header.php'; ?>
 <?php use app\models\User; ?>
 
-<style>
-    /* Harmonisation avec le dashboard */
-    .stat-card { z-index: 1; }
-    .stat-icon { z-index: -1; right: -10px !important; top: 10px !important; }
-    @media (max-width: 1200px) { .stat-icon { opacity: 0.05 !important; } }
-
-    /* Cartes des outils admin */
-    .card-tool { 
-        border-radius: 1rem; 
-        transition: transform 0.25s ease, box-shadow 0.25s ease; 
-        border: 1px solid rgba(0,0,0,0.05) !important; 
-        height: 100%;
-        display: flex;
-        flex-direction: column;
-    }
-    .card-tool:hover { 
-        transform: translateY(-5px); 
-        box-shadow: 0 15px 35px rgba(0,0,0,0.1) !important;
-    }
-    
-    .icon-box-admin {
-        width: 50px; height: 50px;
-        display: flex; align-items: center; justify-content: center;
-        border-radius: 12px; font-size: 1.5rem; margin-bottom: 1.2rem;
-    }
-
-    .icon-box-admin {
-    width: 52px;
-    height: 52px;
-    border-radius: 14px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.4rem;
-    margin-bottom: 1rem;
-    position: relative;
-    overflow: visible;
-    flex-shrink: 0;
-    }
-
-</style>
-
 <div class="container py-4">
+
     <!-- EN-TÊTE -->
-    <div class="d-flex justify-content-between align-items-center mb-5 flex-wrap gap-3">
+    <div class="page-header mb-5">
         <div class="d-flex align-items-center">
-            <div class="avatar-circle rounded-circle bg-dark text-white d-flex align-items-center justify-content-center fw-bold shadow-sm me-3" style="width: 50px; height: 50px; font-size: 1.5rem;">
+            <div class="page-header-avatar bg-dark text-white shadow-sm me-3">
                 <i class="bi bi-shield-lock"></i>
             </div>
             <div>
@@ -55,18 +14,15 @@
                 <p class="text-muted small mb-0">Pilotage des accès et configuration de la plateforme</p>
             </div>
         </div>
-        <div>
-            <a href="<?= URLROOT ?>/dashboard" class="btn btn-light fw-bold shadow-sm px-4 rounded-pill border">
-                <i class="bi bi-arrow-left me-2"></i> Dashboard
-            </a>
-        </div>
+        <a href="<?= URLROOT ?>/dashboard" class="btn btn-light border fw-bold rounded-pill px-4">
+            <i class="bi bi-arrow-left me-2"></i>Dashboard
+        </a>
     </div>
 
-    <!-- STATISTIQUES GLOBALES -->
+    <!-- STATISTIQUES -->
     <div class="row g-4 mb-5">
-        <!-- Widget Utilisateurs -->
         <div class="col-md-4">
-            <div class="card border-0 shadow-sm h-100 rounded-4 overflow-hidden position-relative stat-card" style="background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);">
+            <div class="stat-card card border-0 shadow-sm h-100 rounded-4 overflow-hidden position-relative" style="background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);">
                 <div class="position-absolute top-0 end-0 p-3 opacity-10 text-primary stat-icon">
                     <i class="bi bi-person-vcard display-1"></i>
                 </div>
@@ -82,10 +38,8 @@
                 </div>
             </div>
         </div>
-
-        <!-- Widget Instances -->
         <div class="col-md-4">
-            <div class="card border-0 shadow-sm h-100 rounded-4 overflow-hidden position-relative stat-card" style="background: linear-gradient(135deg, #ffffff 0%, #f0fdf4 100%);">
+            <div class="stat-card card border-0 shadow-sm h-100 rounded-4 overflow-hidden position-relative" style="background: linear-gradient(135deg, #ffffff 0%, #f0fdf4 100%);">
                 <div class="position-absolute top-0 end-0 p-3 opacity-10 text-success stat-icon">
                     <i class="bi bi-diagram-3 display-1"></i>
                 </div>
@@ -101,10 +55,8 @@
                 </div>
             </div>
         </div>
-
-        <!-- Widget Membres -->
         <div class="col-md-4">
-            <div class="card border-0 shadow-sm h-100 rounded-4 overflow-hidden position-relative stat-card" style="background: linear-gradient(135deg, #ffffff 0%, #fffbf0 100%);">
+            <div class="stat-card card border-0 shadow-sm h-100 rounded-4 overflow-hidden position-relative" style="background: linear-gradient(135deg, #ffffff 0%, #fffbf0 100%);">
                 <div class="position-absolute top-0 end-0 p-3 opacity-10 text-warning stat-icon">
                     <i class="bi bi-people display-1"></i>
                 </div>
@@ -122,17 +74,18 @@
         </div>
     </div>
 
-    <h5 class="fw-bold mb-4 text-dark"><i class="bi bi-tools me-2 text-secondary opacity-75"></i>Outils d'administration</h5>
+    <!-- OUTILS -->
+    <h5 class="fw-bold mb-4 text-dark">
+        <i class="bi bi-tools me-2 text-secondary opacity-75"></i>Outils d'administration
+    </h5>
 
-    <!-- GRILLE D'OUTILS -->
     <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
 
-        <!-- GESTION DES UTILISATEURS -->
-        <?php if(User::can('manage_users')): ?>
+        <?php if (User::can('manage_users')): ?>
         <div class="col">
-            <div class="card card-tool bg-white">
+            <div class="card card-tool">
                 <div class="card-body p-4 d-flex flex-column">
-                    <div class="icon-box-admin bg-primary bg-opacity-10 text-primary position-relative">
+                    <div class="admin-tool-icon bg-primary bg-opacity-10 text-primary position-relative">
                         <i class="bi bi-person-gear"></i>
                         <?php if (!empty($count_pending) && $count_pending > 0): ?>
                             <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size:.65rem;">
@@ -148,12 +101,13 @@
         </div>
         <?php endif; ?>
 
-        <!-- GESTION DES INSTANCES -->
-        <?php if(User::can('manage_instances')): ?>
+        <?php if (User::can('manage_instances')): ?>
         <div class="col">
-            <div class="card card-tool bg-white">
+            <div class="card card-tool">
                 <div class="card-body p-4 d-flex flex-column">
-                    <div class="icon-box-admin bg-success bg-opacity-10 text-success"><i class="bi bi-diagram-3-fill"></i></div>
+                    <div class="admin-tool-icon bg-success bg-opacity-10 text-success">
+                        <i class="bi bi-diagram-3-fill"></i>
+                    </div>
                     <h5 class="fw-bold text-dark">Instances & Collèges</h5>
                     <p class="text-muted small flex-grow-1">Paramétrer la composition des instances, désigner les gestionnaires et importer les listes de membres.</p>
                     <a href="<?= URLROOT ?>/admin/instances" class="btn btn-light border w-100 fw-bold text-success rounded-pill mt-2">Configurer les instances</a>
@@ -162,12 +116,13 @@
         </div>
         <?php endif; ?>
 
-        <!-- JOURNAL D'AUDIT -->
-        <?php if(User::can('view_logs')): ?>
+        <?php if (User::can('view_logs')): ?>
         <div class="col">
-            <div class="card card-tool bg-white">
+            <div class="card card-tool">
                 <div class="card-body p-4 d-flex flex-column">
-                    <div class="icon-box-admin bg-secondary bg-opacity-10 text-secondary"><i class="bi bi-fingerprint"></i></div>
+                    <div class="admin-tool-icon bg-secondary bg-opacity-10 text-secondary">
+                        <i class="bi bi-fingerprint"></i>
+                    </div>
                     <h5 class="fw-bold text-dark">Journal d'audit</h5>
                     <p class="text-muted small flex-grow-1">Visualiser l'historique complet et sécurisé des actions effectuées par l'ensemble des utilisateurs.</p>
                     <a href="<?= URLROOT ?>/admin/logs" class="btn btn-light border w-100 fw-bold text-secondary rounded-pill mt-2">Consulter les logs</a>
@@ -176,12 +131,13 @@
         </div>
         <?php endif; ?>
 
-        <!-- PARAMÈTRES SYSTÈME -->
-        <?php if(User::can('manage_system')): ?>
+        <?php if (User::can('manage_system')): ?>
         <div class="col">
-            <div class="card card-tool bg-white">
+            <div class="card card-tool">
                 <div class="card-body p-4 d-flex flex-column">
-                    <div class="icon-box-admin bg-dark bg-opacity-10 text-dark"><i class="bi bi-sliders2-vertical"></i></div>
+                    <div class="admin-tool-icon bg-dark bg-opacity-10 text-dark">
+                        <i class="bi bi-sliders2-vertical"></i>
+                    </div>
                     <h5 class="fw-bold text-dark">Paramètres système</h5>
                     <p class="text-muted small flex-grow-1">Gérer la configuration technique de KronoInstances, le nom de la collectivité et l'envoi d'e-mails.</p>
                     <a href="<?= URLROOT ?>/admin/parametres" class="btn btn-dark w-100 fw-bold rounded-pill mt-2 shadow-sm">Accéder aux réglages</a>
@@ -189,9 +145,10 @@
             </div>
         </div>
         <?php endif; ?>
+
     </div>
 
-    <!-- ENCART DE MISE À JOUR -->
+    <!-- ENCART MISE À JOUR -->
     <?php if (!empty($has_update) && User::can('manage_system')): ?>
     <div class="mt-5">
         <div class="card border-0 shadow-sm rounded-4 overflow-hidden" style="background: linear-gradient(135deg, #0dcaf0 0%, #087990 100%);">
@@ -205,12 +162,15 @@
                     <p class="mb-0 small opacity-75">Installez la dernière version de KronoInstances pour bénéficier des correctifs et nouveautés.</p>
                 </div>
                 <div class="ms-3 z-1">
-                    <a href="<?= URLROOT ?>/admin/parametres?section=update" class="btn btn-light text-info fw-bold px-4 py-2 rounded-pill shadow-sm text-nowrap">Voir les détails</a>
+                    <a href="<?= URLROOT ?>/admin/parametres?section=update" class="btn btn-light text-info fw-bold px-4 py-2 rounded-pill shadow-sm text-nowrap">
+                        Voir les détails
+                    </a>
                 </div>
             </div>
         </div>
     </div>
     <?php endif; ?>
+
 </div>
 
 <?php include __DIR__ . '/../layouts/footer.php'; ?>

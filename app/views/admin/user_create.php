@@ -115,7 +115,7 @@
                 <div class="card border-0 shadow-sm rounded-4 overflow-hidden stat-card">
                     <div class="card-header bg-light border-0 px-4 py-3 d-flex align-items-center gap-2">
                         <div class="ki-section-icon" style="background:#ecfdf5;color:#059669;"><i class="bi bi-toggles"></i></div>
-                        <span class="fw-bold text-dark">Options du compte</span>
+                        <span class="fw-bold text-dark">Vérifications</span>
                     </div>
                     <div class="card-body bg-white p-4 d-flex flex-column gap-3">
 

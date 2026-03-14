@@ -11,6 +11,11 @@ class Seance {
         $this->db = Database::getConnection();
     }
 
+    /**
+     * Récupère les prochaines séances à venir
+     * @param int $limit le nombre de séances à récupérer
+     * @return array les prochaines séances avec le nom de l'instance associée
+     */
     public function getProchaines($limit = 5) {
         $sql = "SELECT s.*, i.nom as instance_nom 
                 FROM seances s
@@ -24,14 +29,48 @@ class Seance {
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
-    public function getByInstance($instanceId) {
-        $sql = "SELECT s.*, 
+    /**
+     * Récupère les séances avec filtres optionnels
+     * @param string $periode 'futur' ou 'passe' pour filtrer par date
+     * @param string $instanceId pour filtrer par instance
+     * @param string $dateDebut pour filtrer les séances à partir de cette date
+     * @param string $dateFin pour filtrer les séances jusqu'à cette date
+     * @return array les séances filtrées avec le nombre de points à l'ordre du jour
+     */
+    public function getFiltered(string $periode = '', string $instanceId = '', string $dateDebut = '', string $dateFin = ''): array {
+        $sql = "SELECT s.*, i.nom as instance_nom,
                        (SELECT COUNT(*) FROM points_odj p WHERE p.seance_id = s.id) as nb_points
                 FROM seances s
-                WHERE s.instance_id = ?
-                ORDER BY s.date_seance DESC";
+                JOIN instances i ON s.instance_id = i.id
+                WHERE 1=1";
+
+        $params = [];
+
+        if ($periode === 'futur') {
+            $sql .= " AND s.date_seance >= CURDATE()";
+        } elseif ($periode === 'passe') {
+            $sql .= " AND s.date_seance < CURDATE()";
+        }
+
+        if (!empty($instanceId)) {
+            $sql .= " AND s.instance_id = :instance_id";
+            $params[':instance_id'] = $instanceId;
+        }
+
+        if (!empty($dateDebut)) {
+            $sql .= " AND s.date_seance >= :date_debut";
+            $params[':date_debut'] = $dateDebut;
+        }
+
+        if (!empty($dateFin)) {
+            $sql .= " AND s.date_seance <= :date_fin";
+            $params[':date_fin'] = $dateFin;
+        }
+
+        $sql .= " ORDER BY s.date_seance DESC";
+
         $stmt = $this->db->prepare($sql);
-        $stmt->execute([$instanceId]);
+        $stmt->execute($params);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
@@ -68,26 +107,25 @@ class Seance {
         return $stmt->execute([$attained ? 1 : 0, $id]);
     }
 
+    public function updatePvPath($id, $path) {
+        $stmt = $this->db->prepare("UPDATE seances SET proces_verbal_path = ? WHERE id = ?");
+        return $stmt->execute([$path, $id]);
+    }
+
     public function delete($id) {
         $stmt = $this->db->prepare("DELETE FROM seances WHERE id = ?");
         return $stmt->execute([$id]);
     }
 
     public function getMembresAvecEmail($instanceId) {
-        $db = \app\core\Database::getConnection();
-        $stmt = $db->prepare("
+        $stmt = $this->db->prepare("
             SELECT id, nom, prenom, email, college, type_mandat
             FROM membres
             WHERE instance_id = ?
-            AND type_mandat = 'titulaire'
-            AND email IS NOT NULL AND email != ''
+              AND type_mandat = 'titulaire'
+              AND email IS NOT NULL AND email != ''
         ");
         $stmt->execute([$instanceId]);
-        return $stmt->fetchAll();
-    }
-
-    public function updatePvPath($id, $path) {
-        $stmt = $this->db->prepare("UPDATE seances SET proces_verbal_path = ? WHERE id = ?");
-        return $stmt->execute([$path, $id]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 }
